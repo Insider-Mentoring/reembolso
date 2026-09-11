@@ -185,8 +185,11 @@ textarea{resize:vertical;min-height:68px}
 .qr-frame::before{top:0;left:0;border-width:4px 0 0 4px;border-radius:12px 0 0 0}
 .qr-frame::after{bottom:0;right:0;border-width:0 4px 4px 0;border-radius:0 0 12px 0}
 
-#add-msg{font-size:13px;margin-top:10px;text-align:center;min-height:18px}
+#add-msg{font-size:13px;margin-top:10px;text-align:center;min-height:18px;display:flex;align-items:center;justify-content:center;gap:7px}
 @keyframes spin{to{transform:rotate(360deg)}}
+.nd-spinner{flex-shrink:0;width:13px;height:13px;border:2px solid var(--border2);border-top-color:var(--text2);border-radius:50%;animation:spin .7s linear infinite}
+#sync-status{display:inline-flex;align-items:center;gap:5px}
+#sync-status .nd-spinner{width:10px;height:10px;border-width:1.5px}
 
 /* Tutorial */
 .tour-overlay{display:none;position:fixed;inset:0;z-index:500}
@@ -1222,7 +1225,14 @@ function carregar(){ return false; } // Drive cuida de tudo
 function setSyncStatus(msg, isErr){
   const el=document.getElementById('sync-status');
   if(!el)return;
-  el.textContent=msg;
+  // Enquanto está de fato enviando pro Drive, mostra um spinner girando junto do
+  // texto — só um "salvando..." parado dava a impressão de que tinha travado.
+  const emAndamento=!isErr && (msg.includes('salvando')||msg.includes('conectando'));
+  if(emAndamento){
+    el.innerHTML='<span class="nd-spinner"></span><span>'+msg+'</span>';
+  }else{
+    el.textContent=msg;
+  }
   el.style.color=isErr?'var(--red)':'var(--text2)';
   // Toast visível quando salva com sucesso
   if(!isErr && msg.includes('salvo às')){
@@ -2297,7 +2307,7 @@ async function addDespesa(){
   // O botão fica desabilitado nesse meio tempo pra não lançar a mesma despesa 2x.
   const btn=document.getElementById('btn-add-despesa');
   btn.disabled=true;
-  showAddMsg('⏳ Salvando...','info');
+  showAddMsg('Salvando...','wait');
   let sucesso=false;
   try{
     sucesso=await salvar();
@@ -2312,20 +2322,26 @@ async function addDespesa(){
     // Sem internet (ou Drive fora do ar) no momento — já está salva no aparelho
     // e o app tenta de novo sozinho a cada 15s; se a pessoa fechar mesmo assim,
     // ela é recuperada automaticamente na próxima vez que o app abrir
-    // (ver mesclarDespesasNaoSincronizadas()).
-    showAddMsg('✅ Salva no aparelho — sincronizando com o Drive assim que possível.','info');
+    // (ver mesclarDespesasNaoSincronizadas()). O spinner continua girando pra
+    // deixar claro que ainda está tentando, não que travou.
+    showAddMsg('Salva no aparelho — sincronizando com o Drive...','wait');
   }
 }
 
 function showAddMsg(txt,t){
   const el=document.getElementById('add-msg');
-  el.style.color=t==='err'?'var(--red)':(t==='info'?'var(--text2)':'var(--green)');
-  // 'info' (ex: "Salvando...") não some sozinho — precisa ficar visível até ser
+  el.style.color=t==='err'?'var(--red)':(t==='wait'?'var(--text2)':'var(--green)');
+  // 'wait' (ex: "Salvando...") não some sozinho — precisa ficar visível até ser
   // substituído pelo resultado real (sucesso ou "salva localmente"). Um auto-clear
   // aqui fazia a mensagem sumir antes da confirmação chegar quando o envio ao
   // Drive demorava mais que o timeout (ex: comprovante grande), dando a impressão
-  // de que travou sem nada acontecendo.
-  el.textContent=txt;
+  // de que travou sem nada acontecendo. O spinner reforça visualmente que ainda
+  // está em andamento, não travado.
+  if(t==='wait'){
+    el.innerHTML='<span class="nd-spinner"></span><span>'+txt+'</span>';
+  }else{
+    el.textContent=txt;
+  }
   if(t==='ok')setTimeout(()=>el.textContent='',2500);
 }
 

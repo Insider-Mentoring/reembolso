@@ -880,7 +880,17 @@ async function carregarTodasDespesas(){
   // no localStorage na hora), mas se o app fechar ou a internet cair antes do envio ao
   // Drive terminar, essa leitura acima pega um despesas.json antigo, sem ela — e ela
   // "sumia" mesmo tendo sido salva.
-  if(mesclarDespesasNaoSincronizadas()) salvar();
+  // Se 'nd_main_synced' ainda não existe (primeira vez que essa lógica roda no aparelho,
+  // ou storage foi limpo), não há como saber com segurança o que já tinha sido
+  // sincronizado antes de hoje — tentar mesclar nesse caso arriscaria reviver despesas
+  // apagadas de verdade em outro aparelho. Em vez disso, usa o que acabou de vir do
+  // Drive agora como marco inicial e só passa a recuperar despesas perdidas a partir
+  // do próximo salvamento bem-sucedido.
+  if(localStorage.getItem('nd_main_synced')===null){
+    try{ localStorage.setItem('nd_main_synced', JSON.stringify(S)); }catch(e){}
+  } else if(mesclarDespesasNaoSincronizadas()){
+    salvar();
+  }
   atualizarUltimoDespesaId();
 }
 
@@ -1342,6 +1352,7 @@ function fazerLogout(){
   localStorage.removeItem('nd_user');
   localStorage.removeItem('nd_drive_auth');
   localStorage.removeItem('nd_main');
+  localStorage.removeItem('nd_main_synced');
   accessToken=null;currentUser=null;rootFolderId=null;
   eventoFolderCache={};globalFileId=null;
   S={eventos:[],despesas:[],notaCounter:0,eventoAtivo:'',prestador:{},tomadores:{}};
@@ -2287,8 +2298,14 @@ async function addDespesa(){
   const btn=document.getElementById('btn-add-despesa');
   btn.disabled=true;
   showAddMsg('⏳ Salvando...','info');
-  const sucesso=await salvar();
-  btn.disabled=false;
+  let sucesso=false;
+  try{
+    sucesso=await salvar();
+  }catch(e){
+    console.error('Erro inesperado ao salvar despesa:', e);
+  }finally{
+    btn.disabled=false;
+  }
   if(sucesso){
     showAddMsg('✅ Despesa adicionada!','ok');
   }else{
@@ -3054,7 +3071,10 @@ function attachFile(e,daCamera){
   corrigirOrientacaoImagem(f).then(dataUrl=>{
     attachs.push({name:nome,type:'image/jpeg',data:dataUrl});
     renderAttachs();
-    if(daCamera) salvarComprovanteAutomatico(dataUrl,nome);
+    // Usa o nome original (f.name) na cópia salva no aparelho — o nome único
+    // (nome) é só pra evitar colisão no Drive, mas deixaria o backup local
+    // irreconhecível na galeria/Downloads do celular.
+    if(daCamera) salvarComprovanteAutomatico(dataUrl,f.name);
   }).catch(()=>{
     // Fallback: salva sem correção se algo falhar
     return new Promise(resolve=>{
@@ -3062,7 +3082,7 @@ function attachFile(e,daCamera){
       reader.onload=ev=>{
         attachs.push({name:nome,type:f.type,data:ev.target.result});
         renderAttachs();
-        if(daCamera) salvarComprovanteAutomatico(ev.target.result,nome);
+        if(daCamera) salvarComprovanteAutomatico(ev.target.result,f.name);
         resolve();
       };
       reader.onerror=resolve;
@@ -3433,7 +3453,7 @@ function editAttachFile(e,daCamera){
   reader.onload=ev=>{
     editAttachs.push({name:nome,type:f.type,data:ev.target.result});
     renderEditAttachs();
-    if(daCamera) salvarComprovanteAutomatico(ev.target.result,nome);
+    if(daCamera) salvarComprovanteAutomatico(ev.target.result,f.name);
     comprovantePendente--;
   };
   reader.onerror=()=>{comprovantePendente--;};

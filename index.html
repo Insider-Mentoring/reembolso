@@ -876,7 +876,35 @@ async function carregarTodasDespesas(){
       }
     }catch(e){ console.warn('Erro ao carregar despesas do evento:', ev.id, e); }
   }
+  // Recupera despesas que ficaram só no aparelho: a pessoa lança a despesa (fica salva
+  // no localStorage na hora), mas se o app fechar ou a internet cair antes do envio ao
+  // Drive terminar, essa leitura acima pega um despesas.json antigo, sem ela — e ela
+  // "sumia" mesmo tendo sido salva.
+  if(mesclarDespesasNaoSincronizadas()) salvar();
   atualizarUltimoDespesaId();
+}
+
+// Compara o que acabou de vir do Drive com o último snapshot salvo localmente
+// (nd_main, atualizado a cada salvar()) e com o último snapshot confirmado como
+// sincronizado (nd_main_synced, atualizado só quando salvarUmaVez() termina sem
+// erro). Uma despesa que está no snapshot local mas não no que veio do Drive só é
+// restaurada se ela NUNCA tiver sido confirmada como sincronizada antes — assim
+// uma despesa apagada de verdade (inclusive de outro aparelho) não volta do nada.
+function mesclarDespesasNaoSincronizadas(){
+  let ls, lsSync;
+  try{ ls = JSON.parse(localStorage.getItem('nd_main')||'null'); }catch(e){ ls=null; }
+  try{ lsSync = JSON.parse(localStorage.getItem('nd_main_synced')||'null'); }catch(e){ lsSync=null; }
+  if(!ls || !Array.isArray(ls.despesas)) return false;
+  const idsAtuais = new Set(S.despesas.map(d=>d.id));
+  const idsJaSincronizados = new Set((lsSync&&Array.isArray(lsSync.despesas))?lsSync.despesas.map(d=>d.id):[]);
+  let recuperou=false;
+  for(const d of ls.despesas){
+    if(!idsAtuais.has(d.id) && !idsJaSincronizados.has(d.id)){
+      S.despesas.push(d);
+      recuperou=true;
+    }
+  }
+  return recuperou;
 }
 
 // Baixa as imagens em BACKGROUND, depois do app já estar visível
@@ -1111,6 +1139,9 @@ async function salvarUmaVez(){
     } else {
       const agora = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
       setSyncStatus('✓ salvo às '+agora);
+      // Marca este estado como confirmado no Drive — usado por mesclarDespesasNaoSincronizadas()
+      // pra distinguir "despesa apagada de verdade" de "despesa que nunca chegou a sincronizar".
+      try{ localStorage.setItem('nd_main_synced', JSON.stringify(S)); }catch(e){}
     }
   }catch(e){
     console.error('Salvar error:', e);
@@ -2956,14 +2987,29 @@ ${comprovantesHTML}
 
 // ─── CROP ─────────────────────────────────────────────────────
 
+// Fotos tiradas pela câmera do celular costumam vir todas com o mesmo nome
+// genérico do navegador (ex: "image.jpg"), e salvarImagemDrive() reaproveita
+// um arquivo já existente com esse nome na pasta do evento em vez de enviar
+// de novo — isso fazia duas fotos diferentes caírem no mesmo arquivo do Drive
+// e aparecerem trocadas (a mesma foto em despesas diferentes) no PDF final.
+// Dando um nome único pra cada anexo aqui, essa colisão nunca mais acontece.
+function nomeUnicoAnexo(nomeOriginal){
+  const partes=(nomeOriginal||'comprovante.jpg').split('.');
+  const ext=partes.length>1?partes.pop():'jpg';
+  const base=partes.join('.')||'comprovante';
+  const sufixo=Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8);
+  return `${base}_${sufixo}.${ext}`;
+}
+
 function attachFile(e,daCamera){
   const f=e.target.files[0];if(!f)return;
   comprovantePendente++;
+  const nome=nomeUnicoAnexo(f.name);
   // PDFs não precisam de correção de orientação
   if(f.type.includes('pdf')){
     const reader=new FileReader();
     reader.onload=ev=>{
-      attachs.push({name:f.name,type:f.type,data:ev.target.result});
+      attachs.push({name:nome,type:f.type,data:ev.target.result});
       renderAttachs();
       comprovantePendente--;
     };
@@ -2974,17 +3020,17 @@ function attachFile(e,daCamera){
   }
   // Imagens: corrigir orientação EXIF antes de salvar
   corrigirOrientacaoImagem(f).then(dataUrl=>{
-    attachs.push({name:f.name,type:'image/jpeg',data:dataUrl});
+    attachs.push({name:nome,type:'image/jpeg',data:dataUrl});
     renderAttachs();
-    if(daCamera) salvarComprovanteAutomatico(dataUrl,f.name);
+    if(daCamera) salvarComprovanteAutomatico(dataUrl,nome);
   }).catch(()=>{
     // Fallback: salva sem correção se algo falhar
     return new Promise(resolve=>{
       const reader=new FileReader();
       reader.onload=ev=>{
-        attachs.push({name:f.name,type:f.type,data:ev.target.result});
+        attachs.push({name:nome,type:f.type,data:ev.target.result});
         renderAttachs();
-        if(daCamera) salvarComprovanteAutomatico(ev.target.result,f.name);
+        if(daCamera) salvarComprovanteAutomatico(ev.target.result,nome);
         resolve();
       };
       reader.onerror=resolve;
@@ -3350,11 +3396,12 @@ function clearEditNF(){
 function editAttachFile(e,daCamera){
   const f=e.target.files[0];if(!f)return;
   comprovantePendente++;
+  const nome=nomeUnicoAnexo(f.name);
   const reader=new FileReader();
   reader.onload=ev=>{
-    editAttachs.push({name:f.name,type:f.type,data:ev.target.result});
+    editAttachs.push({name:nome,type:f.type,data:ev.target.result});
     renderEditAttachs();
-    if(daCamera) salvarComprovanteAutomatico(ev.target.result,f.name);
+    if(daCamera) salvarComprovanteAutomatico(ev.target.result,nome);
     comprovantePendente--;
   };
   reader.onerror=()=>{comprovantePendente--;};

@@ -387,7 +387,7 @@ textarea{resize:vertical;min-height:68px}
       <button class="tr" onclick="clearNF()">✕</button>
     </div>
 
-    <button class="btn btn-primary mt16" onclick="addDespesa()">➕ Adicionar despesa</button>
+    <button class="btn btn-primary mt16" id="btn-add-despesa" onclick="addDespesa()">➕ Adicionar despesa</button>
     <div id="add-msg"></div>
   </div>
 
@@ -1078,26 +1078,33 @@ async function reenviarImagemCorrigida(driveId, base64){
 let salvarEmAndamento=null;
 let salvarPendente=false;
 
+// salvar() devolve uma Promise<boolean>: true só quando o Drive confirmou o
+// salvamento (não apenas o backup local). Quem precisa saber se já é seguro
+// dizer "salvo de verdade" pra pessoa (ex: addDespesa) deve dar await nisso
+// em vez de assumir sucesso assim que a função retorna.
 function salvar(){
   // Backup local imediato — não espera a fila do Drive
   try{ localStorage.setItem('nd_main', JSON.stringify(S)); }catch(e){}
   salvarPendente=true;
   if(salvarEmAndamento) return salvarEmAndamento;
   salvarEmAndamento=(async()=>{
+    let sucesso=false;
     while(salvarPendente){
       salvarPendente=false;
-      await salvarUmaVez();
+      sucesso = await salvarUmaVez();
     }
     salvarEmAndamento=null;
+    return sucesso;
   })();
   return salvarEmAndamento;
 }
 
 async function salvarUmaVez(){
-  if(!accessToken || !rootFolderId){ atualizarStorageInfo(); return; }
+  if(!accessToken || !rootFolderId){ atualizarStorageInfo(); return false; }
 
   setSyncStatus('💾 salvando...');
   let algumErro=false;
+  let sucesso=false;
   try{
     // 1. Salvar despesas por evento (pasta de cada evento) — ANTES dos dados globais:
     // é aqui que getEventoFolderId() pode descobrir/gravar ev.driveFolderId pela
@@ -1142,6 +1149,7 @@ async function salvarUmaVez(){
       // Marca este estado como confirmado no Drive — usado por mesclarDespesasNaoSincronizadas()
       // pra distinguir "despesa apagada de verdade" de "despesa que nunca chegou a sincronizar".
       try{ localStorage.setItem('nd_main_synced', JSON.stringify(S)); }catch(e){}
+      sucesso=true;
     }
   }catch(e){
     console.error('Salvar error:', e);
@@ -1149,6 +1157,7 @@ async function salvarUmaVez(){
     agendarNovaTentativaSalvar();
   }
   atualizarStorageInfo();
+  return sucesso;
 }
 
 let retrySalvarTimer=null;
@@ -2236,7 +2245,7 @@ async function salvarComprovanteNoDispositivo(){
   }
 }
 
-function addDespesa(){
+async function addDespesa(){
   if(comprovantePendente>0){showAddMsg('⏳ Aguarde o comprovante terminar de processar e tente de novo.','err');return}
   if(!S.eventoAtivo){showAddMsg('⚠️ Selecione um evento primeiro.','err');return}
   // Validar "outro"
@@ -2261,23 +2270,42 @@ function addDespesa(){
     nfLink,
     attachs:attachs.map(a=>({name:a.name,type:a.type,data:a.data}))
   });
-  salvar();
 
-  // Limpa campos — mantém data, tipo e dia
+  // Limpa campos já — mantém data, tipo e dia. A pessoa pode continuar lançando
+  // a próxima despesa enquanto esta termina de subir pro Drive em segundo plano.
   const dataAtual=document.getElementById('data').value;
   document.getElementById('valor').value='R$ 0,00';
   document.getElementById('data').value=dataAtual;
   if(tipo==='outro') document.getElementById('outro-tipo').value='';
   clearNF();attachs=[];renderAttachs();
   atualizarDesc();
-  showAddMsg('✅ Despesa adicionada!','ok');
+
+  // Só confirma "Despesa adicionada!" depois que o Drive realmente aceitou o
+  // salvamento — antes disso a pessoa via o "ok" na hora e já fechava o app,
+  // achando que tinha terminado, mesmo com o envio pro Drive ainda em andamento.
+  // O botão fica desabilitado nesse meio tempo pra não lançar a mesma despesa 2x.
+  const btn=document.getElementById('btn-add-despesa');
+  btn.disabled=true;
+  showAddMsg('⏳ Salvando...','info');
+  const sucesso=await salvar();
+  btn.disabled=false;
+  if(sucesso){
+    showAddMsg('✅ Despesa adicionada!','ok');
+  }else{
+    // Sem internet (ou Drive fora do ar) no momento — já está salva no aparelho
+    // e o app tenta de novo sozinho a cada 15s; se a pessoa fechar mesmo assim,
+    // ela é recuperada automaticamente na próxima vez que o app abrir
+    // (ver mesclarDespesasNaoSincronizadas()).
+    showAddMsg('✅ Salva no aparelho — sincronizando com o Drive assim que possível.','info');
+  }
 }
 
 function showAddMsg(txt,t){
   const el=document.getElementById('add-msg');
-  el.style.color=t==='err'?'var(--red)':'var(--green)';
+  el.style.color=t==='err'?'var(--red)':(t==='info'?'var(--text2)':'var(--green)');
   el.textContent=txt;
   if(t==='ok')setTimeout(()=>el.textContent='',2500);
+  if(t==='info')setTimeout(()=>el.textContent='',6000);
 }
 
 // ─── DESPESAS ─────────────────────────────────────────────────

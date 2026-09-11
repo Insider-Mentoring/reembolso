@@ -2303,9 +2303,13 @@ async function addDespesa(){
 function showAddMsg(txt,t){
   const el=document.getElementById('add-msg');
   el.style.color=t==='err'?'var(--red)':(t==='info'?'var(--text2)':'var(--green)');
+  // 'info' (ex: "Salvando...") não some sozinho — precisa ficar visível até ser
+  // substituído pelo resultado real (sucesso ou "salva localmente"). Um auto-clear
+  // aqui fazia a mensagem sumir antes da confirmação chegar quando o envio ao
+  // Drive demorava mais que o timeout (ex: comprovante grande), dando a impressão
+  // de que travou sem nada acontecendo.
   el.textContent=txt;
   if(t==='ok')setTimeout(()=>el.textContent='',2500);
-  if(t==='info')setTimeout(()=>el.textContent='',6000);
 }
 
 // ─── DESPESAS ─────────────────────────────────────────────────

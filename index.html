@@ -494,12 +494,9 @@ textarea{resize:vertical;min-height:68px}
     <span style="position:absolute;top:0;right:0;width:40px;height:40px;border-top:4px solid #fff;border-right:4px solid #fff;border-radius:0 12px 0 0"></span>
     <span style="position:absolute;bottom:0;left:0;width:40px;height:40px;border-bottom:4px solid #fff;border-left:4px solid #fff;border-radius:0 0 0 12px"></span>
   </div>
-  <p style="position:absolute;bottom:216px;color:#fff;font-size:14px;text-align:center;padding:0 32px;opacity:.85">Se não focar sozinho, toque na tela sobre o QR ou use um dos botões abaixo</p>
-  <button class="qr-cancel" onclick="abrirCameraNativa()" style="position:absolute;bottom:156px;background:#34c759;color:#fff">🎯 Usar app de câmera do celular</button>
-  <button class="qr-cancel" id="qr-capture-btn" onclick="capturarFotoQR()" style="position:absolute;bottom:96px;background:#0a84ff;color:#fff">📸 Focar e capturar foto</button>
+  <p style="position:absolute;bottom:216px;color:#fff;font-size:14px;text-align:center;padding:0 32px;opacity:.85">Se não focar sozinho, toque na tela sobre o QR</p>
   <button class="qr-cancel" onclick="pararQR()" style="position:absolute;bottom:36px">✕ Cancelar</button>
 </div>
-<input type="file" id="qr-file-camera" accept="image/*" capture="environment" style="display:none" onchange="lerQRDeArquivo(event)" />
 
 <script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
 <script>
@@ -2074,114 +2071,6 @@ function mostrarAnelFoco(x,y){
   ring.classList.add('active');
   clearTimeout(ring._t);
   ring._t=setTimeout(()=>ring.classList.remove('active'),700);
-}
-
-// Fallback para quando o foco contínuo/manual via getUserMedia simplesmente não é
-// suportado pelo aparelho: tira uma foto de verdade via ImageCapture (aciona o
-// mesmo pipeline de captura do app de câmera nativo, com seu próprio ciclo de
-// foco — diferente de só pegar um frame do preview ao vivo, que sai borrado se
-// o preview já estiver desfocado) e decodifica essa imagem.
-async function capturarFotoQR(){
-  if(!qrStream||!zxingReader)return;
-  const track=qrStream.getVideoTracks()[0];
-  const video=document.getElementById('qr-video');
-  const btn=document.getElementById('qr-capture-btn');
-  if(btn){btn.disabled=true;btn.textContent='🔎 Focando...';}
-  let objectUrl=null;
-  try{
-    if(track&&track.getCapabilities){
-      const caps=track.getCapabilities()||{};
-      if(caps.focusMode?.includes('single-shot')){
-        const apply={focusMode:'single-shot'};
-        if(caps.pointsOfInterest) apply.pointsOfInterest=[{x:0.5,y:0.5}];
-        try{await track.applyConstraints({advanced:[apply]});}catch(e){}
-      }
-    }
-    // Tempo para a lente assentar o foco antes de capturar
-    await new Promise(r=>setTimeout(r,600));
-
-    if(btn) btn.textContent='📸 Lendo...';
-    let dataUrl=null;
-    if(window.ImageCapture&&track){
-      try{
-        const imageCapture=new ImageCapture(track);
-        // Pede a foto na maior resolução que a câmera suportar (não a do preview de
-        // vídeo, que costuma ser bem menor) — com o celular mais longe pra focar,
-        // o QR fica pequeno na imagem, e mais pixels ajudam o leitor a decodificar.
-        let photoOptions={};
-        try{
-          const photoCaps=await imageCapture.getPhotoCapabilities();
-          if(photoCaps.imageWidth&&photoCaps.imageHeight){
-            photoOptions.imageWidth=photoCaps.imageWidth.max;
-            photoOptions.imageHeight=photoCaps.imageHeight.max;
-          }
-        }catch(e){}
-        const blob=await imageCapture.takePhoto(photoOptions);
-        objectUrl=URL.createObjectURL(blob);
-        dataUrl=objectUrl;
-      }catch(e){console.warn('ImageCapture falhou, usando frame do vídeo:',e);}
-    }
-    if(!dataUrl){
-      const canvas=document.createElement('canvas');
-      canvas.width=video.videoWidth;
-      canvas.height=video.videoHeight;
-      canvas.getContext('2d').drawImage(video,0,0);
-      dataUrl=canvas.toDataURL('image/jpeg',0.95);
-    }
-
-    const result=await zxingReader.decodeFromImageUrl(dataUrl);
-    const txt=result.getText();
-    if(txt){pararQR();confirmarQR(txt);}
-  }catch(e){
-    alert('Não consegui ler o QR nessa foto. Afaste um pouco o celular (uns 15-20cm do papel) e tente de novo — muito perto, a câmera não consegue focar.');
-  }finally{
-    if(objectUrl) URL.revokeObjectURL(objectUrl);
-    if(btn){btn.disabled=false;btn.textContent='📸 Focar e capturar foto';}
-  }
-}
-
-// Usa o app de câmera nativo do celular (fora do controle do navegador) para tirar
-// a foto e decodifica o QR a partir do arquivo resultante. Caminho mais confiável
-// quando a câmera via getUserMedia não foca bem nesse aparelho — o app nativo tem
-// acesso direto ao hardware, sem as limitações da API de câmera do navegador.
-function abrirCameraNativa(){
-  // Solta nosso stream ANTES de abrir o app nativo, para as duas câmeras não
-  // disputarem o hardware ao mesmo tempo.
-  if(qrStream){
-    try{qrStream.getTracks().forEach(t=>t.stop());}catch(e){}
-    qrStream=null;
-  }
-  document.getElementById('qr-file-camera').click();
-}
-
-async function lerQRDeArquivo(e){
-  const f=e.target.files[0];
-  e.target.value='';
-  if(!f){
-    // Cancelou o app nativo sem tirar foto — reabre a câmera ao vivo, já que
-    // paramos o stream antes de abrir o seletor.
-    iniciarQR(qrTarget);
-    return;
-  }
-  try{
-    if(!zxingReader){
-      const hints=new Map();
-      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.QR_CODE]);
-      hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
-      zxingReader=new ZXing.BrowserMultiFormatReader(hints);
-    }
-    const reader=new FileReader();
-    const dataUrl=await new Promise((res,rej)=>{
-      reader.onload=ev=>res(ev.target.result);
-      reader.onerror=()=>rej(new Error('Erro ao ler arquivo'));
-      reader.readAsDataURL(f);
-    });
-    const result=await zxingReader.decodeFromImageUrl(dataUrl);
-    const txt=result.getText();
-    if(txt){pararQR();confirmarQR(txt);}
-  }catch(err){
-    alert('Não consegui ler o QR nessa foto. Tire de novo, de frente e com boa luz, ou cole o link manualmente.');
-  }
 }
 
 function pararQR(){

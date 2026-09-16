@@ -1935,6 +1935,20 @@ function atualizarDesc(){
 // ─── QR CODE ──────────────────────────────────────────────────
 let zxingReader=null;
 let qrTarget='lancar'; // 'lancar' ou 'editar' — para saber onde aplicar o link lido
+let qrNativeLoopId=null;
+
+// BarcodeDetector (Chrome/Edge — Android e desktop) usa o motor de detecção
+// nativo do sistema (ML Kit no Android), o MESMO que o app de Câmera e o Google
+// Lens usam — bem mais rápido que decodificar cada frame na mão via zxing, que
+// é sempre visivelmente mais lento que a câmera nativa. Não existe no Safari
+// (iPhone) até hoje, então lá o app continua caindo no zxing normalmente.
+async function suportaBarcodeNativo(){
+  if(!('BarcodeDetector' in window)) return false;
+  try{
+    const formatos=await BarcodeDetector.getSupportedFormats();
+    return formatos.includes('qr_code');
+  }catch(e){ return false; }
+}
 
 async function iniciarQR(target){
   qrTarget=target||'lancar';
@@ -1987,6 +2001,24 @@ async function iniciarQR(target){
     video.setAttribute('playsinline','true');
     await video.play();
     video.onclick=focarQR;
+
+    if(await suportaBarcodeNativo()){
+      const detector=new BarcodeDetector({formats:['qr_code']});
+      const loopNativo=async()=>{
+        if(!qrStream) return; // pararQR() já encerrou a leitura
+        try{
+          const codes=await detector.detect(video);
+          if(codes.length && codes[0].rawValue){
+            pararQR();
+            confirmarQR(codes[0].rawValue);
+            return;
+          }
+        }catch(e){}
+        qrNativeLoopId=requestAnimationFrame(loopNativo);
+      };
+      qrNativeLoopId=requestAnimationFrame(loopNativo);
+      return;
+    }
 
     await zxingReader.decodeFromStream(
       qrStream,
@@ -2153,6 +2185,7 @@ async function lerQRDeArquivo(e){
 }
 
 function pararQR(){
+  if(qrNativeLoopId){ cancelAnimationFrame(qrNativeLoopId); qrNativeLoopId=null; }
   if(zxingReader){
     try{zxingReader.reset();}catch(e){}
   }

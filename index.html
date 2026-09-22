@@ -623,7 +623,7 @@ function mostrarTelaLogin(){
   if(loading) loading.style.display='none';
 }
 
-function loginComGoogle(){
+function loginComGoogle(forcarConsentimento){
   const btn = document.getElementById('btn-google-login');
   const loading = document.getElementById('login-loading');
   if(btn) btn.style.display='none';
@@ -637,6 +637,7 @@ function loginComGoogle(){
     scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile',
     include_granted_scopes: 'true'
   });
+  if(forcarConsentimento===true) params.set('prompt','consent');
   window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
 }
 
@@ -784,78 +785,103 @@ async function salvarImagemDrive(nome, base64, parentId){
 }
 
 // ── Iniciar Drive ─────────────────────────────────────────────
+// Antes, QUALQUER erro aqui virava "⚠️ sem conexão" — inclusive Drive
+// sobrecarregado (403/429), instabilidade do Google (5xx), permissão do Drive
+// não concedida no login e até erro de JavaScript ao montar a tela. A pessoa
+// via "sem conexão" com internet boa e não tinha o que fazer. Agora cada caso
+// tem sua mensagem, e erros passageiros são tentados de novo com espera crescente.
+function erroDePermissaoDrive(e){
+  if(!e || e.status!==403) return false;
+  const m=String(e.message||'');
+  return m.includes('insufficientPermissions') || m.includes('ACCESS_TOKEN_SCOPE_INSUFFICIENT')
+    || m.includes('insufficient authentication scopes');
+}
+function erroPassageiroDrive(e){
+  if(!e) return false;
+  if(e.status===429 || e.status>=500) return true;
+  if(e.status===403 && !erroDePermissaoDrive(e)) return true; // rateLimitExceeded etc.
+  return !e.status && e instanceof TypeError;                 // falha de rede no fetch
+}
+function mensagemErroDrive(e){
+  if(!navigator.onLine) return '⚠️ sem conexão';
+  if(e && !e.status && e instanceof TypeError) return '⚠️ não consegui falar com o Google Drive';
+  if(e && (e.status===429 || e.status===403)) return '⚠️ Google Drive ocupado agora';
+  if(e && e.status>=500) return '⚠️ Google Drive instável agora';
+  if(e && e.status) return '⚠️ erro do Google Drive ('+e.status+')';
+  return '⚠️ erro ao carregar dados do Drive';
+}
+
+// Busca tudo no Drive e preenche S. Retorna 'setup' no primeiro acesso.
+async function carregarDadosDrive(){
+  rootFolderId = await buscarOuCriarPasta(ROOT_FOLDER_NAME, null);
+  globalFileId = await buscarOuCriarArquivo('_global.json', rootFolderId, {
+    eventos:[], notaCounter:0, prestador:{}, tomadores:{}
+  });
+  const global = await lerArquivo(globalFileId);
+  if(!global.prestador || !global.prestador.nome) return 'setup';
+
+  S.eventos = global.eventos || [];
+  S.notaCounter = global.notaCounter || 0;
+  S.prestador = global.prestador || {};
+  // Mescla padrões com customizados salvos (customizados têm prioridade)
+  S.tomadores = {...TOMADORES_PADRAO, ...(global.tomadores||{})};
+  Object.assign(TOMADORES, S.tomadores);
+  if(global.eventoAtivo) S.eventoAtivo = global.eventoAtivo;
+
+  await carregarTodasDespesas();
+  return 'ok';
+}
+
 async function iniciarDrive(){
   setSyncStatus('⏳ conectando...');
-  try{
-    // 1. Pasta raiz
-    rootFolderId = await buscarOuCriarPasta(ROOT_FOLDER_NAME, null);
-
-    // 2. Arquivo global (eventos, counter, prestador, tomadores)
-    globalFileId = await buscarOuCriarArquivo('_global.json', rootFolderId, {
-      eventos:[], notaCounter:0, prestador:{}, tomadores:{}
-    });
-
-    // 3. Carregar dados globais
-    const global = await lerArquivo(globalFileId);
-
-    // Primeiro acesso sem dados
-    if(!global.prestador || !global.prestador.nome){
-      document.getElementById('login-screen').style.display='none';
-      document.getElementById('setup-screen').style.display='block';
-      if(currentUser) document.getElementById('setup-email').value = currentUser.email||'';
-      return;
+  const esperas=[0, 2000, 5000, 10000];
+  let resultado=null, ultimoErro=null;
+  for(let i=0;i<esperas.length;i++){
+    if(esperas[i]) await new Promise(r=>setTimeout(r,esperas[i]));
+    try{
+      resultado = await carregarDadosDrive();
+      break;
+    }catch(e){
+      ultimoErro=e;
+      console.error('Drive init error (tentativa '+(i+1)+'):', e);
+      if(e && e.status===401){ sessaoExpirada(); return; }
+      if(erroDePermissaoDrive(e)){ permissaoDriveFaltando(); return; }
+      if(!erroPassageiroDrive(e)) break;
     }
+  }
 
-    S.eventos = global.eventos || [];
-    S.notaCounter = global.notaCounter || 0;
-    S.prestador = global.prestador || {};
-    // Mescla padrões com customizados salvos (customizados têm prioridade)
-    S.tomadores = {...TOMADORES_PADRAO, ...(global.tomadores||{})};
-    Object.assign(TOMADORES, S.tomadores);
-    if(global.eventoAtivo) S.eventoAtivo = global.eventoAtivo;
+  if(resultado==='setup'){
+    document.getElementById('login-screen').style.display='none';
+    document.getElementById('setup-screen').style.display='block';
+    if(currentUser) document.getElementById('setup-email').value = currentUser.email||'';
+    return;
+  }
 
-    // 4. Carregar despesas de cada evento (pasta própria)
-    await carregarTodasDespesas();
-
+  if(resultado==='ok'){
     localStorage.setItem('nd_drive_auth','1');
     mostrarApp();
     setSyncStatus('✓ conectado');
     // Baixa imagens em background, sem travar a tela
     restaurarImagensBackground().catch(e=>console.warn('Background image load error:',e));
-  }catch(e){
-    console.error('Drive init error:', e);
-    if(e && e.status===401){ sessaoExpirada(); return; }
-    // Tenta de novo uma vez após 2 segundos
-    try{
-      await new Promise(r=>setTimeout(r,2000));
-      rootFolderId = await buscarOuCriarPasta(ROOT_FOLDER_NAME, null);
-      globalFileId = await buscarOuCriarArquivo('_global.json', rootFolderId, {
-        eventos:[], notaCounter:0, prestador:{}, tomadores:{}
-      });
-      const global2 = await lerArquivo(globalFileId);
-      if(global2.prestador?.nome){
-        S.eventos=global2.eventos||[];
-        S.notaCounter=global2.notaCounter||0;
-        S.prestador=global2.prestador||{};
-        S.tomadores=global2.tomadores||{};
-        if(global2.eventoAtivo) S.eventoAtivo=global2.eventoAtivo;
-        await carregarTodasDespesas();
-      } else if(!global2.prestador?.nome){
-        document.getElementById('login-screen').style.display='none';
-        document.getElementById('setup-screen').style.display='block';
-        return;
-      }
-      mostrarApp();
-      setSyncStatus('✓ conectado');
-    }catch(e2){
-      console.error('Drive retry failed:', e2);
-      if(e2 && e2.status===401){ sessaoExpirada(); return; }
-      setSyncStatus('⚠️ sem conexão', true);
-      const ls=localStorage.getItem('nd_main');
-      if(ls) try{S={...S,...JSON.parse(ls)};atualizarUltimoDespesaId();}catch(e3){}
-      mostrarApp();
-    }
+    return;
   }
+
+  // Não deu — abre com os dados locais e avisa o motivo real.
+  setSyncStatus(mensagemErroDrive(ultimoErro), true);
+  const ls=localStorage.getItem('nd_main');
+  if(ls) try{S={...S,...JSON.parse(ls)};atualizarUltimoDespesaId();}catch(e3){}
+  mostrarApp();
+}
+
+// No login, a tela do Google deixa a pessoa desmarcar o acesso ao Drive. Aí o
+// token funciona, mas toda chamada ao Drive dá 403 — antes isso aparecia como
+// "sem conexão". Agora pede o login de novo, forçando a tela de permissões.
+function permissaoDriveFaltando(){
+  localStorage.removeItem('nd_access_token');
+  localStorage.removeItem('nd_token_expiry');
+  accessToken=null;
+  alert('O app precisa de permissão para salvar no seu Google Drive.\n\nNa próxima tela, deixe marcada a opção de acesso ao Google Drive.');
+  loginComGoogle(true);
 }
 
 async function getEventoFolderId(eventoId){

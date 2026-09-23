@@ -60,6 +60,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 .slabel{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.08em;margin:20px 0 8px}
 .slabel:first-child{margin-top:0}
+/* Nota dividida (conta em grupo com uma nota só) */
+.div-toggle{display:flex;align-items:center;gap:8px;margin:10px 0 0;font-size:13.5px;color:var(--text);cursor:pointer;user-select:none}
+.div-toggle input{width:18px;height:18px;margin:0;accent-color:var(--primary);flex-shrink:0}
+.div-box{background:var(--bg2);border-radius:var(--radius-sm);padding:12px;margin-top:8px}
+.div-pessoas{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--bg);border:.5px solid var(--border2);border-radius:var(--radius-sm);padding:6px}
+.div-pessoas button{width:38px;height:38px;border-radius:50%;border:.5px solid var(--border2);background:var(--bg2);color:var(--text);font-size:20px;line-height:1;cursor:pointer;font-family:inherit}
+.div-pessoas span{font-size:14px;color:var(--text2)}
+.div-pessoas b{font-size:18px;color:var(--text)}
+.div-resumo{font-size:13px;color:var(--text2);margin-top:10px;line-height:1.5}
+.div-resumo:empty{display:none}
+.div-resumo b{color:var(--text)}
+.tag-div{display:inline-flex;align-items:center;font-size:11px;color:var(--purple);background:var(--purple-bg);border-radius:20px;padding:3px 9px;white-space:nowrap}
 
 label{font-size:13px;color:var(--text2);display:block;margin:12px 0 4px}
 label:first-child{margin-top:0}
@@ -390,6 +402,23 @@ textarea{resize:vertical;min-height:68px}
 
     <input type="text" id="valor" placeholder="R$ 0,00" inputmode="numeric"
       oninput="mascaraValor(this,event)" onfocus="setTimeout(()=>cursorNoFimValor(this))" onclick="cursorNoFimValor(this)" style="margin-top:12px;font-size:28px;font-weight:700;text-align:center;padding:14px;font-family:ui-monospace,'SF Mono','Cascadia Mono','Roboto Mono',Consolas,monospace;font-variant-numeric:tabular-nums" />
+
+    <label class="div-toggle">
+      <input type="checkbox" id="div-check" onchange="alternarDivisao('')" />
+      <span>🧾 Nota dividida com outras pessoas</span>
+    </label>
+    <div class="div-box" id="div-box" style="display:none">
+      <label style="margin-top:0">Valor total da nota</label>
+      <input type="text" id="div-total" placeholder="R$ 0,00" inputmode="numeric"
+        oninput="mascaraValor(this,event);calcularDivisao('')" onfocus="setTimeout(()=>cursorNoFimValor(this))" onclick="cursorNoFimValor(this)" />
+      <label>Dividida entre</label>
+      <div class="div-pessoas">
+        <button type="button" onclick="mudarPessoasDivisao('',-1)" aria-label="Menos uma pessoa">−</button>
+        <span><b id="div-pessoas">2</b> pessoas</span>
+        <button type="button" onclick="mudarPessoasDivisao('',1)" aria-label="Mais uma pessoa">+</button>
+      </div>
+      <div class="div-resumo" id="div-resumo"></div>
+    </div>
 
     <div class="slabel" style="margin:16px 0 8px">Nota fiscal / comprovante</div>
     <div class="alert a-warn" style="margin-bottom:8px">⚠️ Guarde o cupom fiscal em papel até o reembolso cair na conta. A foto é um apoio — só jogue o original fora depois de receber.</div>
@@ -2037,6 +2066,79 @@ function mascaraValor(input, ev){
   definirValorCampo(input, novo);
 }
 
+// ─── NOTA DIVIDIDA ────────────────────────────────────────────
+// Conta em grupo com uma nota só (ex: R$ 800 pra 10 pessoas): a despesa guarda
+// a parte da pessoa em `valor` e a nota cheia em `divisao` {total, pessoas}.
+// Isso vira uma observação no PDF, pro financeiro entender por que o comprovante
+// mostra R$ 800 e o pedido é de R$ 80. p = '' (tela de lançar) ou 'edit-' (editar).
+const DIV_MIN_PESSOAS=2, DIV_MAX_PESSOAS=99;
+
+function campoValorDivisao(p){ return document.getElementById(p==='edit-'?'edit-valor':'valor'); }
+function centavosDe(id){ return parseInt(document.getElementById(id).dataset.centavos||'0',10)||0; }
+function pessoasDivisao(p){ return parseInt(document.getElementById(p+'div-pessoas').textContent,10)||DIV_MIN_PESSOAS; }
+
+function alternarDivisao(p){
+  const on=document.getElementById(p+'div-check').checked;
+  document.getElementById(p+'div-box').style.display=on?'block':'none';
+  if(!on){ document.getElementById(p+'div-resumo').textContent=''; return; }
+  // Já tinha digitado um valor? Quase sempre é o da nota cheia — vira o total.
+  const total=document.getElementById(p+'div-total');
+  if(!centavosDe(p+'div-total')){
+    const v=parseInt(campoValorDivisao(p).dataset.centavos||'0',10)||0;
+    if(v) definirValorCampo(total, v);
+  }
+  calcularDivisao(p);
+}
+
+function mudarPessoasDivisao(p, delta){
+  const n=Math.min(DIV_MAX_PESSOAS, Math.max(DIV_MIN_PESSOAS, pessoasDivisao(p)+delta));
+  document.getElementById(p+'div-pessoas').textContent=n;
+  calcularDivisao(p);
+}
+
+// Só roda quando o total ou o nº de pessoas muda — se a pessoa ajustou a parte
+// dela à mão depois (divisão desigual), o ajuste fica.
+function calcularDivisao(p){
+  const total=centavosDe(p+'div-total');
+  const n=pessoasDivisao(p);
+  const res=document.getElementById(p+'div-resumo');
+  if(!total){ res.textContent=''; return; }
+  const parte=Math.round(total/n);
+  definirValorCampo(campoValorDivisao(p), parte);
+  res.innerHTML=`${fv(total/100)} ÷ ${n} = <b>${fv(parte/100)}</b> pra cada um — já coloquei no valor acima. Se a sua parte foi diferente, é só ajustar lá.`;
+}
+
+// Mensagem de erro, ou '' se estiver tudo certo (ou a opção desmarcada).
+function validarDivisao(p, valor){
+  if(!document.getElementById(p+'div-check').checked) return '';
+  const total=centavosDe(p+'div-total');
+  if(!total) return 'Informe o valor total da nota dividida.';
+  if(Math.round(valor*100)>total) return 'Sua parte não pode ser maior que o valor total da nota.';
+  return '';
+}
+
+function lerDivisao(p){
+  if(!document.getElementById(p+'div-check').checked) return null;
+  const total=centavosDe(p+'div-total');
+  return total ? {total: total/100, pessoas: pessoasDivisao(p)} : null;
+}
+
+function preencherDivisao(p, divisao){
+  document.getElementById(p+'div-check').checked=!!divisao;
+  document.getElementById(p+'div-box').style.display=divisao?'block':'none';
+  definirValorCampo(document.getElementById(p+'div-total'), divisao?Math.round(divisao.total*100):0);
+  document.getElementById(p+'div-pessoas').textContent=divisao?divisao.pessoas:DIV_MIN_PESSOAS;
+  // Não recalcula aqui: o valor salvo pode ter sido ajustado à mão.
+  document.getElementById(p+'div-resumo').textContent=divisao
+    ? `${fv(divisao.total)} ÷ ${divisao.pessoas} pessoas. Se mudar o total ou as pessoas, a sua parte é recalculada.`
+    : '';
+}
+
+// Observação que vai no PDF e no rótulo da página do comprovante.
+function textoDivisao(d){
+  return d.divisao&&d.divisao.total ? `Nota de ${fv(d.divisao.total)} dividida entre ${d.divisao.pessoas} pessoas` : '';
+}
+
 function getValorNumerico(){
   const v=document.getElementById('valor').value;
   // Remove R$, pontos de milhar, troca vírgula por ponto
@@ -2390,6 +2492,9 @@ async function addDespesa(){
   const valor=getValorNumerico();
   if(!data){showAddMsg('⚠️ Informe a data.','err');return}
   if(!valor||valor<=0){showAddMsg('⚠️ Informe um valor válido.','err');return}
+  const erroDiv=validarDivisao('',valor);
+  if(erroDiv){showAddMsg('⚠️ '+erroDiv,'err');return}
+  const divisao=lerDivisao('');
 
   // Montar descrição automaticamente
   const ev=getNomeEvento();
@@ -2401,6 +2506,7 @@ async function addDespesa(){
     id:novoDespesaId(),eventoId:S.eventoAtivo,desc,data,valor,tipo,
     diaAtivo,
     nfLink,
+    ...(divisao?{divisao}:{}),
     attachs:attachs.map(a=>({name:a.name,type:a.type,data:a.data}))
   });
 
@@ -2408,6 +2514,7 @@ async function addDespesa(){
   // a próxima despesa enquanto esta termina de subir pro Drive em segundo plano.
   const dataAtual=document.getElementById('data').value;
   definirValorCampo(document.getElementById('valor'),0);
+  preencherDivisao('',null);
   document.getElementById('data').value=dataAtual;
   if(tipo==='outro') document.getElementById('outro-tipo').value='';
   clearNF();attachs=[];renderAttachs();
@@ -2513,6 +2620,7 @@ function renderDespesas(){
         <div class="exp-actions" style="margin-top:8px">
           ${d.nfLink?`<button class="tag-btn" data-nflink="${escAttr(d.nfLink)}" onclick="window.open(this.dataset.nflink,'_blank')" title="Ver NF-e"><svg class="icon" style="color:var(--purple)"><use href="#i-link"/></svg>NF-e</button>`:''}
           ${d.attachs&&d.attachs.length?`<button class="tag-btn" onclick="previewDespesaAttach(${d.id},0)" title="Ver comprovante"><svg class="icon"><use href="#i-receipt"/></svg>${d.attachs.length}</button>`:''}
+          ${d.divisao&&d.divisao.total?`<span class="tag-div" title="${textoDivisao(d)}">÷ ${d.divisao.pessoas} · nota ${fv(d.divisao.total)}</span>`:''}
           <div class="spacer"></div>
           <button onclick="editarDespesa(${d.id})" title="Editar" aria-label="Editar"><svg class="icon"><use href="#i-pencil"/></svg></button>
           <button class="danger" onclick="delDespesa(${d.id})" title="Excluir" aria-label="Excluir"><svg class="icon"><use href="#i-trash"/></svg></button>
@@ -2761,7 +2869,7 @@ async function gerarPDFUnificado(){
             const dw = iw*scale, dh = ih*scale;
             const x = (pw-dw)/2, y = (ph-dh)/2;
             // Label do comprovante
-            page.drawText(`${d.desc.split('\n')[0]} — ${a.name}`, {
+            page.drawText(`${d.desc.split('\n')[0]} — ${a.name}${textoDivisao(d)?' — '+textoDivisao(d):''}`, {
               x:20, y:ph-20, size:8, color:rgb(0.4,0.4,0.4),
               maxWidth: pw-40
             });
@@ -2880,6 +2988,7 @@ function gerarHTMLNota(ev, desp){
         <strong>${d.desc.split('\n')[0]}</strong><br>
         ${(()=>{const l=d.desc.split('\n')[1]||'';const p=l.indexOf('|');return p>-1?l.slice(0,p+1)+'<em>'+l.slice(p+1)+'</em>':l})()}
         ${d.nfLink?` &nbsp;<a href="${escAttr(d.nfLink)}" style="font-size:9px;color:#1a56db">Ver NF-e »</a>`:''}
+        ${textoDivisao(d)?`<br><span style="font-size:10.5px;color:#333">${textoDivisao(d)}</span>`:''}
       </td>
       <td style="text-align:center;padding:5px 4px;border-right:${BRD};vertical-align:top">1</td>
       <td style="text-align:right;padding:5px 10px;vertical-align:top;white-space:nowrap">${parseFloat(d.valor).toFixed(2).replace('.',',')}</td>
@@ -2996,7 +3105,7 @@ function gerarPDF(){
       <td style="text-align:center;padding:6px 4px;border-right:1px solid #000;vertical-align:top;font-size:12px">${i+1}</td>
       <td style="padding:6px 10px;border-right:1px solid #000;vertical-align:top;font-size:12px">
         <strong>${d.desc.split('\n')[0]}</strong><br>
-        ${(()=>{const l=d.desc.split('\n')[1]||'';const p=l.indexOf('|');return p>-1?l.slice(0,p+1)+'<em style="color:#333">'+l.slice(p+1)+'</em>':l})()}${d.nfLink?` &nbsp;<a href="${escAttr(d.nfLink)}" style="font-size:11px;color:#1a56db;text-decoration:underline;white-space:nowrap">Ver NF-e \u00bb</a>`:''}
+        ${(()=>{const l=d.desc.split('\n')[1]||'';const p=l.indexOf('|');return p>-1?l.slice(0,p+1)+'<em style="color:#333">'+l.slice(p+1)+'</em>':l})()}${d.nfLink?` &nbsp;<a href="${escAttr(d.nfLink)}" style="font-size:11px;color:#1a56db;text-decoration:underline;white-space:nowrap">Ver NF-e \u00bb</a>`:''}${textoDivisao(d)?`<br><span style="font-size:12px;color:#333">${textoDivisao(d)}</span>`:''}
       </td>
       <td style="text-align:center;padding:6px 4px;border-right:1px solid #000;vertical-align:top;font-size:12px">1</td>
       <td style="text-align:right;padding:6px 10px;vertical-align:top;font-size:12px;white-space:nowrap">${parseFloat(d.valor).toFixed(2).replace('.',',')}</td>
@@ -3017,7 +3126,7 @@ function gerarPDF(){
     if(d.attachs&&d.attachs.length){
       d.attachs.forEach((a,ai)=>{
         if(!a.data)return;
-        const label=`Comprovante ${di+1}.${ai+1} \u2014 ${d.desc.split('\n')[0]} (${fd(d.data)}) \u2014 ${a.name}`;
+        const label=`Comprovante ${di+1}.${ai+1} \u2014 ${d.desc.split('\n')[0]} (${fd(d.data)}) \u2014 ${a.name}${textoDivisao(d)?' \u2014 '+textoDivisao(d):''}`;
         if(a.type&&a.type.startsWith('image/')){
           comprovantesHTML+=`<div style="page-break-before:always;padding:16px;text-align:center;font-family:Arial,sans-serif">
             <p style="font-size:10px;color:#555;margin-bottom:10px;text-align:left;border-bottom:1px solid #ccc;padding-bottom:6px">${label}</p>
@@ -3493,6 +3602,7 @@ function editarDespesa(id){
   // Valor
   const n=parseFloat(d.valor)||0;
   definirValorCampo(document.getElementById('edit-valor'),n*100);
+  preencherDivisao('edit-',d.divisao||null);
 
   // NF link
   editNFLink=d.nfLink||'';
@@ -3625,6 +3735,9 @@ function salvarEdicao(){
   const valorTxt=document.getElementById('edit-valor').value;
   const valor=parseFloat(valorTxt.replace(/[R$\s.]/g,'').replace(',','.'));
   if(!valor||valor<=0){alert('Informe um valor válido.');return}
+  const erroDiv=validarDivisao('edit-',valor);
+  if(erroDiv){alert(erroDiv);return}
+  const divisao=lerDivisao('edit-');
 
   const editDiaEl2=document.getElementById('edit-dia');
   const dia=parseInt(editDiaEl2.value||editDiaEl2.dataset.val)||1;
@@ -3641,6 +3754,8 @@ function salvarEdicao(){
     nfLink:editNFLink,
     attachs:editAttachs.map(a=>({...a}))
   };
+  // Desmarcou "nota dividida" na edição: a informação sai da despesa (e do PDF).
+  if(divisao) S.despesas[idx].divisao=divisao; else delete S.despesas[idx].divisao;
 
   salvar();
   closeModal('modal-editar');
@@ -4572,6 +4687,23 @@ initGoogle();
 
     <input type="text" id="edit-valor" inputmode="numeric" oninput="mascaraValor(this,event)" onfocus="setTimeout(()=>cursorNoFimValor(this))" onclick="cursorNoFimValor(this)"
       style="margin-top:12px;font-size:28px;font-weight:700;text-align:center;padding:14px;font-family:ui-monospace,'SF Mono','Cascadia Mono','Roboto Mono',Consolas,monospace;font-variant-numeric:tabular-nums" />
+
+    <label class="div-toggle">
+      <input type="checkbox" id="edit-div-check" onchange="alternarDivisao('edit-')" />
+      <span>🧾 Nota dividida com outras pessoas</span>
+    </label>
+    <div class="div-box" id="edit-div-box" style="display:none">
+      <label style="margin-top:0">Valor total da nota</label>
+      <input type="text" id="edit-div-total" placeholder="R$ 0,00" inputmode="numeric"
+        oninput="mascaraValor(this,event);calcularDivisao('edit-')" onfocus="setTimeout(()=>cursorNoFimValor(this))" onclick="cursorNoFimValor(this)" />
+      <label>Dividida entre</label>
+      <div class="div-pessoas">
+        <button type="button" onclick="mudarPessoasDivisao('edit-',-1)" aria-label="Menos uma pessoa">−</button>
+        <span><b id="edit-div-pessoas">2</b> pessoas</span>
+        <button type="button" onclick="mudarPessoasDivisao('edit-',1)" aria-label="Mais uma pessoa">+</button>
+      </div>
+      <div class="div-resumo" id="edit-div-resumo"></div>
+    </div>
 
     <div class="slabel" style="margin:16px 0 8px">Nota fiscal / comprovante</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">

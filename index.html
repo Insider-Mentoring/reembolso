@@ -67,7 +67,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .div-pessoas{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--bg);border:.5px solid var(--border2);border-radius:var(--radius-sm);padding:6px}
 .div-pessoas button{width:38px;height:38px;border-radius:50%;border:.5px solid var(--border2);background:var(--bg2);color:var(--text);font-size:20px;line-height:1;cursor:pointer;font-family:inherit}
 .div-pessoas span{font-size:14px;color:var(--text2)}
-.div-pessoas b{font-size:18px;color:var(--text)}
+.div-pessoas input[type=text]{width:52px;margin:0 4px 0 0;padding:6px 4px;text-align:center;font-size:18px;font-weight:700;color:var(--text);border:.5px solid var(--border2);border-radius:8px;background:var(--bg2)}
 .div-resumo{font-size:13px;color:var(--text2);margin-top:10px;line-height:1.5}
 .div-resumo:empty{display:none}
 .div-resumo b{color:var(--text)}
@@ -414,7 +414,7 @@ textarea{resize:vertical;min-height:68px}
       <label>Dividida entre</label>
       <div class="div-pessoas">
         <button type="button" onclick="mudarPessoasDivisao('',-1)" aria-label="Menos uma pessoa">−</button>
-        <span><b id="div-pessoas">2</b> pessoas</span>
+        <span><input type="text" id="div-pessoas" value="2" inputmode="numeric" maxlength="2" aria-label="Número de pessoas" oninput="digitarPessoasDivisao('')" onblur="ajustarPessoasDivisao('')" onfocus="selecionarPessoasDivisao(this)" onclick="selecionarPessoasDivisao(this)" /> pessoas</span>
         <button type="button" onclick="mudarPessoasDivisao('',1)" aria-label="Mais uma pessoa">+</button>
       </div>
       <div class="div-resumo" id="div-resumo"></div>
@@ -2075,7 +2075,35 @@ const DIV_MIN_PESSOAS=2, DIV_MAX_PESSOAS=99;
 
 function campoValorDivisao(p){ return document.getElementById(p==='edit-'?'edit-valor':'valor'); }
 function centavosDe(id){ return parseInt(document.getElementById(id).dataset.centavos||'0',10)||0; }
-function pessoasDivisao(p){ return parseInt(document.getElementById(p+'div-pessoas').textContent,10)||DIV_MIN_PESSOAS; }
+// Nº de pessoas já dentro da faixa (campo vazio ou "1" no meio da digitação vira o mínimo).
+function pessoasDivisao(p){
+  const n=parseInt(document.getElementById(p+'div-pessoas').value,10)||0;
+  return Math.min(DIV_MAX_PESSOAS, Math.max(DIV_MIN_PESSOAS, n));
+}
+
+// Digitando: só números; recalcula quando o número já faz sentido (≥ 2) — o "1"
+// no caminho pra "10" não mexe no valor.
+function digitarPessoasDivisao(p){
+  const el=document.getElementById(p+'div-pessoas');
+  const limpo=el.value.replace(/\D/g,'').slice(0,2);
+  if(limpo!==el.value) el.value=limpo;
+  if((parseInt(limpo,10)||0)>=DIV_MIN_PESSOAS) calcularDivisao(p);
+}
+
+// Ao tocar no campo, seleciona o número inteiro pra ser substituído pelo que a
+// pessoa digitar. Precisa ser depois do toque: um select() direto no foco é
+// desfeito pelo próprio toque, e aí com "10" no campo digitar "25" não fazia
+// nada (o campo aceita só 2 dígitos).
+function selecionarPessoasDivisao(el){
+  setTimeout(()=>{ try{ el.setSelectionRange(0, el.value.length); }catch(e){} });
+}
+
+// Saiu do campo: traz pra faixa (vazio ou 1 → 2) e recalcula.
+function ajustarPessoasDivisao(p){
+  const el=document.getElementById(p+'div-pessoas');
+  const n=pessoasDivisao(p);
+  if(String(n)!==el.value){ el.value=n; calcularDivisao(p); }
+}
 
 function alternarDivisao(p){
   const on=document.getElementById(p+'div-check').checked;
@@ -2092,7 +2120,7 @@ function alternarDivisao(p){
 
 function mudarPessoasDivisao(p, delta){
   const n=Math.min(DIV_MAX_PESSOAS, Math.max(DIV_MIN_PESSOAS, pessoasDivisao(p)+delta));
-  document.getElementById(p+'div-pessoas').textContent=n;
+  document.getElementById(p+'div-pessoas').value=n;
   calcularDivisao(p);
 }
 
@@ -2127,7 +2155,7 @@ function preencherDivisao(p, divisao){
   document.getElementById(p+'div-check').checked=!!divisao;
   document.getElementById(p+'div-box').style.display=divisao?'block':'none';
   definirValorCampo(document.getElementById(p+'div-total'), divisao?Math.round(divisao.total*100):0);
-  document.getElementById(p+'div-pessoas').textContent=divisao?divisao.pessoas:DIV_MIN_PESSOAS;
+  document.getElementById(p+'div-pessoas').value=divisao?divisao.pessoas:DIV_MIN_PESSOAS;
   // Não recalcula aqui: o valor salvo pode ter sido ajustado à mão.
   document.getElementById(p+'div-resumo').textContent=divisao
     ? `${fv(divisao.total)} ÷ ${divisao.pessoas} pessoas. Se mudar o total ou as pessoas, a sua parte é recalculada.`
@@ -4699,7 +4727,7 @@ initGoogle();
       <label>Dividida entre</label>
       <div class="div-pessoas">
         <button type="button" onclick="mudarPessoasDivisao('edit-',-1)" aria-label="Menos uma pessoa">−</button>
-        <span><b id="edit-div-pessoas">2</b> pessoas</span>
+        <span><input type="text" id="edit-div-pessoas" value="2" inputmode="numeric" maxlength="2" aria-label="Número de pessoas" oninput="digitarPessoasDivisao('edit-')" onblur="ajustarPessoasDivisao('edit-')" onfocus="selecionarPessoasDivisao(this)" onclick="selecionarPessoasDivisao(this)" /> pessoas</span>
         <button type="button" onclick="mudarPessoasDivisao('edit-',1)" aria-label="Mais uma pessoa">+</button>
       </div>
       <div class="div-resumo" id="edit-div-resumo"></div>

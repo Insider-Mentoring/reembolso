@@ -214,6 +214,10 @@ textarea{resize:vertical;min-height:68px}
 .tour-box.trocando{opacity:0}
 .tour-box .tour-top{display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .tour-box .tour-step{font-size:11px;color:var(--text2);flex:1}
+.tour-aba{font-size:11px;font-weight:600;color:var(--primary);background:color-mix(in srgb,var(--primary) 14%,transparent);padding:3px 9px;border-radius:20px;white-space:nowrap}
+.tour-aba.mudou{animation:tour-aba-pulso .45s ease 3}
+@keyframes tour-aba-pulso{50%{transform:scale(1.08);background:color-mix(in srgb,var(--primary) 26%,transparent)}}
+.tour-exemplo{display:inline-block;vertical-align:2px;margin-left:4px;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--amber);background:var(--amber-bg);padding:2px 6px;border-radius:6px}
 .tour-progress{height:3px;background:var(--bg3);border-radius:3px;overflow:hidden;margin-bottom:12px}
 .tour-progress > div{height:100%;background:var(--primary);transition:width .35s ease}
 .tour-close{background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:0 2px;line-height:1}
@@ -228,7 +232,7 @@ textarea{resize:vertical;min-height:68px}
 .tour-dot.visto{background:color-mix(in srgb,var(--primary) 45%,var(--border2))}
 @media (prefers-reduced-motion:reduce){
   .tour-highlight,.tour-box,.tour-progress > div{transition:none}
-  .tour-highlight::after{animation:none}
+  .tour-highlight::after,.tour-aba.mudou{animation:none}
 }
 .btn-help{background:var(--bg2);border:.5px solid var(--border2);border-radius:50%;width:30px;height:30px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text2);flex-shrink:0}
 </style>
@@ -3642,7 +3646,7 @@ function atualizarBtnTema(){
 const TOUR_STEPS = [
   {
     title: '👋 Bem-vindo!',
-    desc: 'Em 1 minuto você vê o caminho completo: do cadastro do evento até o reembolso cair na conta.',
+    desc: 'Em 1 minuto você vê o caminho completo: do cadastro do evento até o reembolso cair na conta. O tour vai passando pelas abas da barra de baixo — sempre que mudar de aba, ela é destacada antes.',
     dica: 'Use ← Voltar pra rever um passo, ou toque nas bolinhas abaixo pra pular direto.'
   },
   {
@@ -3653,7 +3657,8 @@ const TOUR_STEPS = [
   },
   {
     title: '👆 Evento ativo',
-    desc: 'O evento destacado é o ativo: toda despesa que você lançar vai pra ele. Pra trocar, é só tocar em outro card.',
+    desc: 'Depois de criado, o evento aparece aqui. O que está destacado é o ativo: toda despesa que você lançar vai pra ele. Pra trocar, é só tocar em outro card.',
+    dicaDemo: 'Esse card é só um exemplo — o seu evento aparece aqui assim que você criar.',
     tab: 'eventos', alvo: ['#eventos-list .ev-card'], opcional: true
   },
   {
@@ -3673,15 +3678,16 @@ const TOUR_STEPS = [
     tab: 'lancar', alvo: ['#comprovante-btns']
   },
   {
-    title: '🔗 Nota fiscal pelo QR code',
-    desc: 'Toque no ícone e aponte a câmera pro QR code do cupom fiscal pra puxar o link da NF-e — ou cole o link no campo ao lado.',
+    title: '🔗 QR code da nota (opcional)',
+    desc: 'Se o cupom tiver QR code, dá pra ler com a câmera e anexar o link da NF-e — ou colar o link no campo ao lado. É só mais uma opção: a foto do comprovante já basta.',
     dica: 'Guarde o cupom em papel até o reembolso cair na conta.',
     tab: 'lancar', alvo: ['#nf-input-row']
   },
   {
     title: '📋 Confira as despesas',
     desc: 'Aqui fica tudo que você lançou no evento, com o total por categoria. Reordene com ▲▼ e toque no ✏️ pra editar.',
-    tab: 'despesas', alvo: ['#despesas-list .exp-row', '#tab-despesas']
+    dicaDemo: 'Essas despesas são só exemplos — as suas aparecem aqui conforme você lança.',
+    tab: 'despesas', alvo: ['#despesas-list .exp-item', '#tab-despesas']
   },
   {
     title: '📥 Gere o PDF',
@@ -3698,6 +3704,7 @@ const TOUR_STEPS = [
     desc: 'Depois que o reembolso cair, toque em "Finalizar" no card do evento. Você escolhe arquivar ou apagar — o PDF continua salvo no seu Google Drive.',
     // Sem evento ainda não existe botão "Finalizar" — destaca o "Novo" com um texto que faça sentido.
     descAlt: 'Cada evento que você criar aqui ganha um botão "Finalizar". Depois que o reembolso cair, é só tocar nele e escolher arquivar ou apagar — o PDF continua salvo no seu Google Drive.',
+    dicaDemo: 'Esse card é só um exemplo — no seu evento o botão fica no mesmo lugar.',
     tab: 'eventos', alvo: ['#eventos-list .tag-btn', '#screen-eventos .btn-primary']
   },
   {
@@ -3709,7 +3716,7 @@ const TOUR_STEPS = [
   {
     title: '☁️ Salvo no seu Drive',
     desc: 'Tudo fica guardado no seu Google Drive. Aqui em cima aparece se está salvando, se já salvou ou se algo deu errado.',
-    alvo: ['#sync-status', '.hdr']
+    onde: 'Topo da tela', alvo: ['#sync-status', '.hdr']
   },
   {
     title: '✅ Pronto!',
@@ -3723,6 +3730,92 @@ let tourVistos = new Set();
 let tourAlvo = null;
 let tourTimer = null;
 let tourRaf = null;
+let tourSeq = 0;              // invalida timers de um passo quando a pessoa já foi pra outro
+let tourAbaAtual = null;
+let tourDemo = false;         // card de evento de exemplo na tela (pessoa ainda sem evento)
+const TOUR_ABAS = {eventos:'Eventos', lancar:'Lançar', despesas:'Despesas', gerar:'Gerar', config:'Dados'};
+
+// Quem ainda não tem evento veria a lista vazia nos passos que falam do card
+// do evento — mostra um card de exemplo só na tela (não entra em S nem no Drive;
+// o próximo renderEventos() o apaga sozinho).
+function inserirEventoExemplo(){
+  const lista = document.getElementById('eventos-list');
+  if(!lista || lista.querySelector('.ev-card')) return false;
+  const iso = d => d.toLocaleDateString('sv-SE');
+  const ini = new Date(), fim = new Date();
+  fim.setDate(fim.getDate() + 2);
+  lista.innerHTML = `<div class="ev-card selected" style="pointer-events:none">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+      <div style="flex:1;min-width:0">
+        <div class="ev-title">Evento de exemplo | Sua cidade <span class="tour-exemplo">exemplo</span></div>
+        <span class="ev-tomador">IGD</span>
+        <div class="ev-sub">${fd(iso(ini))} → ${fd(iso(fim))}</div>
+      </div>
+      <div class="ev-stat"><div class="n">Sem despesas ainda</div></div>
+    </div>
+    <div class="exp-actions" style="margin-top:10px">
+      <button tabindex="-1" aria-hidden="true"><svg class="icon"><use href="#i-pencil"/></svg></button>
+      <button class="tag-btn" tabindex="-1" aria-hidden="true"><svg class="icon"><use href="#i-check-circle"/></svg>Finalizar</button>
+    </div>
+  </div>`;
+  return true;
+}
+
+// Mesma ideia pra aba Despesas: resumo por categoria + duas despesas de exemplo,
+// só na tela (o próximo renderDespesas() apaga).
+function inserirDespesasExemplo(){
+  const lista = document.getElementById('despesas-list');
+  const topo = document.getElementById('total-area');
+  if(!lista || !topo || lista.querySelector('.exp-item')) return false;
+  const iso = d => d.toLocaleDateString('sv-SE');
+  const d1 = new Date(), d2 = new Date();
+  d2.setDate(d2.getDate() + 1);
+  const exemplos = [
+    {tipo:'transporte', desc:'Reembolso Transporte', dia:1, data:iso(d1), valor:48.9},
+    {tipo:'alimentacao', desc:'Reembolso Alimentação', dia:2, data:iso(d2), valor:62.3},
+  ];
+  const total = exemplos.reduce((s,d)=>s+d.valor,0);
+  const pctT = exemplos[0].valor / total * 100;
+  topo.innerHTML = `
+    <div class="summary">
+      <div class="summary-top">
+        <span class="summary-label">Total do evento</span>
+        <span class="summary-total">${fv(total)}</span>
+      </div>
+      <div class="summary-bar">
+        <span style="width:${pctT}%;background:var(--blue)"></span>
+        <span style="width:${100-pctT}%;background:var(--green)"></span>
+      </div>
+      <div class="summary-legend">
+        <span><i class="dot" style="background:var(--blue)"></i>Transporte · ${fv(exemplos[0].valor)}</span>
+        <span><i class="dot" style="background:var(--green)"></i>Alimentação · ${fv(exemplos[1].valor)}</span>
+      </div>
+    </div>`;
+  lista.innerHTML = `<div class="tour-demo-despesas" style="pointer-events:none">${exemplos.map((d,idx)=>`
+    <div class="exp-item${d.tipo!=='transporte'?' tipo-alimentacao':''}">
+      <div class="exp-stripe"></div>
+      <div class="exp-body">
+        <div class="exp-row">
+          <div style="flex:1;min-width:0">
+            <div class="exp-top"><svg class="icon"><use href="#${d.tipo==='transporte'?'i-car':'i-fork'}"/></svg><span class="exp-desc">${d.desc}</span> <span class="tour-exemplo">exemplo</span></div>
+            <div class="exp-meta">Dia ${d.dia} · ${fd(d.data)}</div>
+          </div>
+          <div class="exp-right"><div class="exp-val">${fv(d.valor)}</div></div>
+        </div>
+        <div class="exp-actions" style="margin-top:8px">
+          <button class="tag-btn" tabindex="-1" aria-hidden="true"><svg class="icon"><use href="#i-receipt"/></svg>1</button>
+          <div class="spacer"></div>
+          <button tabindex="-1" aria-hidden="true"><svg class="icon"><use href="#i-pencil"/></svg></button>
+          <button class="danger" tabindex="-1" aria-hidden="true"><svg class="icon"><use href="#i-trash"/></svg></button>
+          <div class="stepper">
+            <button tabindex="-1" aria-hidden="true" ${idx===0?'disabled':''}><svg class="icon"><use href="#i-chevron"/></svg></button>
+            <button tabindex="-1" aria-hidden="true" ${idx===exemplos.length-1?'disabled':''}><svg class="icon" style="transform:rotate(180deg)"><use href="#i-chevron"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>`).join('')}</div>`;
+  return true;
+}
 
 function mostrarBannerTutorial(){
   if(document.getElementById('banner-tutorial')) return;
@@ -3758,6 +3851,8 @@ function iniciarTour(){
   tourStep = 0;
   tourDirecao = 1;
   tourVistos = new Set();
+  const telaAtiva = document.querySelector('.screen.active');
+  tourAbaAtual = telaAtiva ? telaAtiva.id.replace('screen-','') : null;
   document.getElementById('tour-overlay').classList.add('active');
   window.addEventListener('scroll', agendarPosicaoTour, {passive:true});
   window.addEventListener('resize', agendarPosicaoTour);
@@ -3784,32 +3879,40 @@ function acharAlvoTour(step){
 function renderTourStep(){
   const total = TOUR_STEPS.length;
   const step = TOUR_STEPS[tourStep];
-  if(step.tab) go(step.tab);
+  const seq = ++tourSeq;
+  const abaAntes = tourAbaAtual;
+  if(step.tab){ go(step.tab); tourAbaAtual = step.tab; }
+  tourDemo = (step.tab === 'eventos' && inserirEventoExemplo()) ||
+             (step.tab === 'despesas' && inserirDespesasExemplo());
 
   const { el: alvo, alternativo } = acharAlvoTour(step);
-  // Passo que depende de dado da pessoa (ex: ainda não tem evento) — pula no
+  // Passo que depende de dado da pessoa e ficou sem alvo mesmo assim — pula no
   // sentido em que ela está navegando, em vez de mostrar um destaque vazio.
   if(!alvo && step.opcional){
     const prox = tourStep + tourDirecao;
     if(prox >= 0 && prox < total){ tourStep = prox; return renderTourStep(); }
   }
   tourVistos.add(tourStep);
-  tourAlvo = alvo;
 
   const reduzir = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  // Rola até o alvo ANTES de medir — antes o tour media com a tela no topo, e
-  // botões mais abaixo (Gerar PDF, e-mail) ficavam fora da tela ou atrás da caixa.
-  if(alvo) alvo.scrollIntoView({block:'center', behavior: reduzir ? 'auto' : 'smooth'});
+  const mudouAba = !!step.tab && step.tab !== abaAntes;
+  // Trocou de aba: o destaque passa primeiro pela aba na barra inferior (e a
+  // caixa avisa "Indo para a aba X"), senão o tour parecia pular de tela sem
+  // dizer onde a pessoa foi parar.
+  const navBtn = mudouAba && !reduzir ? document.getElementById('tab-' + step.tab) : null;
 
   const box = document.getElementById('tour-box');
   box.classList.add('trocando');
   clearTimeout(tourTimer);
   tourTimer = setTimeout(()=>{
+    if(seq !== tourSeq) return;
     document.getElementById('tour-step-label').textContent = `Passo ${tourStep+1} de ${total}`;
     document.getElementById('tour-progress-bar').style.width = ((tourStep+1)/total*100)+'%';
     document.getElementById('tour-title').textContent = step.title;
     document.getElementById('tour-desc').textContent = (alternativo && step.descAlt) || step.desc;
-    document.getElementById('tour-dica').textContent = step.dica ? '💡 ' + step.dica : '';
+    const dica = (tourDemo && step.dicaDemo) || step.dica;
+    document.getElementById('tour-dica').textContent = dica ? '💡 ' + dica : '';
+    marcarAbaTour(step, navBtn ? 'indo' : mudouAba ? 'mudou' : '');
 
     document.getElementById('tour-dots').innerHTML = TOUR_STEPS.map((s,i)=>
       `<button class="tour-dot${i===tourStep?' active':tourVistos.has(i)?' visto':''}" onclick="irParaTour(${i})" aria-label="Ir para o passo ${i+1}: ${s.title.replace(/"/g,'')}"></button>`).join('');
@@ -3818,9 +3921,42 @@ function renderTourStep(){
     document.getElementById('tour-next-btn').textContent =
       tourStep === total-1 ? '✅ Concluir' : tourStep === 0 ? 'Começar →' : 'Próximo →';
 
+    if(navBtn){
+      tourAlvo = navBtn;
+      posicionarTour();
+      box.classList.remove('trocando');
+      tourTimer = setTimeout(()=>{
+        if(seq !== tourSeq) return;
+        marcarAbaTour(step, '');
+        irAoAlvoTour(alvo, reduzir, seq);
+      }, 1100);
+    } else {
+      irAoAlvoTour(alvo, reduzir, seq);
+    }
+  }, 120);
+}
+
+// Rola até o alvo ANTES de medir — antes o tour media com a tela no topo, e
+// botões mais abaixo (Gerar PDF, e-mail) ficavam fora da tela ou atrás da caixa.
+function irAoAlvoTour(alvo, reduzir, seq){
+  tourAlvo = alvo;
+  if(alvo) alvo.scrollIntoView({block:'center', behavior: reduzir ? 'auto' : 'smooth'});
+  tourTimer = setTimeout(()=>{
+    if(seq !== tourSeq) return;
     posicionarTour();
-    box.classList.remove('trocando');
-  }, alvo && !reduzir ? 380 : 120);
+    document.getElementById('tour-box').classList.remove('trocando');
+  }, alvo && !reduzir ? 380 : 0);
+}
+
+// Etiqueta "📍 Aba X" da caixa. estado: 'indo' (a caminho da aba nova),
+// 'mudou' (chegou numa aba nova, sem animação de passagem) ou ''.
+function marcarAbaTour(step, estado){
+  const el = document.getElementById('tour-aba');
+  const nome = step.tab ? 'Aba ' + TOUR_ABAS[step.tab] : step.onde;
+  if(!nome){ el.style.display = 'none'; return; }
+  el.style.display = '';
+  el.textContent = estado === 'indo' ? '➡️ Indo para a aba ' + TOUR_ABAS[step.tab] : '📍 ' + nome;
+  el.classList.toggle('mudou', estado !== '');
 }
 
 function agendarPosicaoTour(){
@@ -3901,6 +4037,7 @@ function irParaTour(i){
 }
 
 function pularTour(){
+  tourSeq++;
   clearTimeout(tourTimer);
   document.getElementById('tour-overlay').classList.remove('active','sem-alvo');
   document.getElementById('tour-highlight').style.opacity = '0';
@@ -3909,7 +4046,8 @@ function pularTour(){
   document.removeEventListener('keydown', teclaTour);
   tourAlvo = null;
   localStorage.setItem('nd_tour_done','1');
-  go('eventos'); // não deixa a pessoa largada na última aba que o tour abriu
+  renderDespesas(); // tira as despesas de exemplo, se o tour colocou
+  go('eventos'); // não deixa a pessoa largada na última aba que o tour abriu (e tira o evento de exemplo)
 }
 
 function abrirAjuda(){
@@ -4477,6 +4615,7 @@ initGoogle();
   <div class="tour-box" id="tour-box">
     <div class="tour-top">
       <div class="tour-step" id="tour-step-label"></div>
+      <span class="tour-aba" id="tour-aba"></span>
       <button class="tour-close" onclick="pularTour()" title="Fechar tour" aria-label="Fechar tour">✕</button>
     </div>
     <div class="tour-progress"><div id="tour-progress-bar"></div></div>

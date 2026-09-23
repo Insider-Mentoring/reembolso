@@ -471,6 +471,13 @@ textarea{resize:vertical;min-height:68px}
       ⚠️ Prints de tela do banco <b>não são aceitos</b>.<br><br>
       🚗 Uber/99: envie PDF com trajeto completo.
     </div>
+    <div class="slabel">Suporte</div>
+    <div class="info-card" style="font-size:13px">
+      <div style="color:var(--text2);margin-bottom:10px;line-height:1.6">
+        Algo não funcionou ou tem uma ideia pra melhorar o app? Conte pra gente — nos problemas, as informações técnicas do app vão junto pra facilitar a correção.
+      </div>
+      <button class="btn btn-sm" onclick="abrirRelato()">💬 Relatar problema ou sugerir melhoria</button>
+    </div>
     <div class="slabel">Armazenamento</div>
     <div class="info-card" style="font-size:13px">
       <div id="storage-info">Calculando...</div>
@@ -505,6 +512,32 @@ textarea{resize:vertical;min-height:68px}
 
 <script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
 <script>
+// ─── LOG DE DIAGNÓSTICO ───────────────────────────────────────
+// Guarda os últimos erros do app pra irem junto no "Relatar um problema" —
+// sem isso, uma reclamação como "deu sem conexão" chegava sem nenhuma pista da
+// causa real. Fica só em memória (some ao recarregar a página).
+const diagLog=[];
+function registrarDiag(tipo, partes){
+  let txt=partes.map(p=>{
+    if(p instanceof Error) return p.message+(p.status?' [status '+p.status+']':'');
+    if(typeof p==='object'){ try{ return JSON.stringify(p); }catch(e){ return String(p); } }
+    return String(p);
+  }).join(' ');
+  // Nunca deixa um token do Google ir parar no relato.
+  txt=txt.replace(/ya29\.[\w.\-]+/g,'[token]').replace(/Bearer\s+[\w.\-]+/g,'Bearer [token]').slice(0,500);
+  diagLog.push({t:new Date().toISOString(), tipo, txt});
+  if(diagLog.length>40) diagLog.shift();
+}
+(function(){
+  const errOrig=console.error.bind(console), warnOrig=console.warn.bind(console);
+  console.error=(...a)=>{ registrarDiag('erro',a); errOrig(...a); };
+  console.warn=(...a)=>{ registrarDiag('aviso',a); warnOrig(...a); };
+  window.addEventListener('error',e=>registrarDiag('js',[e.message+' @'+(e.filename||'').split('/').pop()+':'+e.lineno]));
+  window.addEventListener('unhandledrejection',e=>registrarDiag('promise',[e.reason]));
+  window.addEventListener('online',()=>registrarDiag('rede',['voltou online']));
+  window.addEventListener('offline',()=>registrarDiag('rede',['ficou offline']));
+})();
+
 // ─── DADOS ────────────────────────────────────────────────────
 const TOMADORES_PADRAO={
   PLAT:{nome:'PLAT MENTORIAS E TREINAMENTOS LTDA',cnpj:'45.805.035/0001-36',end:'SHCN CRN 516 CLN 316 - Asa Norte, Brasília'},
@@ -1304,6 +1337,7 @@ function carregar(){ return false; } // Drive cuida de tudo
 
 function setSyncStatus(msg, isErr){
   const el=document.getElementById('sync-status');
+  if(isErr) registrarDiag('tela',[msg]);
   if(!el)return;
   // Enquanto está de fato enviando pro Drive, mostra um spinner girando junto do
   // texto — só um "salvando..." parado dava a impressão de que tinha travado.
@@ -3861,6 +3895,135 @@ function initApp(){
     atualizarStorageInfo();
 }
 
+// ─── RELATAR PROBLEMA ─────────────────────────────────────────
+// Envia o relato pra uma planilha do responsável pelo app, via Google Apps
+// Script (ver relatos/Code.gs — lá também está o passo a passo de publicação).
+const RELATOS_URL='https://script.google.com/macros/s/AKfycbzaCiawH8vfS4ApEow6-xVIiuedUdC3AOlwM9Xf-i7mv2G2AuC7DiF8WQh2kIWWJDHd/exec';
+
+function abrirRelato(){
+  document.getElementById('relato-tipo').value='problema';
+  ajustarRelatoTipo();
+  document.getElementById('relato-msg').value='';
+  document.getElementById('relato-print').value='';
+  document.getElementById('relato-status').textContent='';
+  document.getElementById('relato-enviar').disabled=false;
+  openModal('modal-relato');
+}
+
+function ajustarRelatoTipo(){
+  const sug=document.getElementById('relato-tipo').value==='sugestao';
+  document.getElementById('relato-msg-label').textContent=sug?'Qual é a sua ideia?':'O que aconteceu?';
+  document.getElementById('relato-msg').placeholder=sug
+    ?'Ex: seria útil poder duplicar uma despesa que se repete todo dia.'
+    :'Ex: fui lançar uma despesa e apareceu "sem conexão", mesmo com internet boa.';
+  document.getElementById('relato-print-label').textContent=sug?'Imagem de exemplo (opcional)':'Print da tela (opcional)';
+  document.getElementById('relato-aviso').textContent=sug
+    ?'Seu nome e e-mail vão junto, pra gente poder conversar sobre a ideia se precisar.'
+    :'Vão junto, automaticamente: seu nome e e-mail, aparelho/navegador, situação da conexão e os últimos erros do app. Nenhuma senha ou dado bancário é enviado.';
+}
+
+function coletarDiagnostico(){
+  let pendentes=null;
+  try{
+    const sync=JSON.parse(localStorage.getItem('nd_main_synced')||'null');
+    const idsSync=new Set((sync&&sync.despesas||[]).map(d=>d.id));
+    pendentes=(S.despesas||[]).filter(d=>!idsSync.has(d.id)).length;
+  }catch(e){}
+  const expiry=parseInt(localStorage.getItem('nd_token_expiry')||'0');
+  return {
+    quando: new Date().toISOString(),
+    online: navigator.onLine,
+    conexao: navigator.connection ? {tipo:navigator.connection.effectiveType, downlinkMbps:navigator.connection.downlink} : null,
+    navegador: navigator.userAgent,
+    tela: screen.width+'x'+screen.height,
+    instalado: window.matchMedia('(display-mode: standalone)').matches,
+    statusNaTela: (document.getElementById('sync-status')||{}).textContent||'',
+    drive: {
+      logado: !!accessToken,
+      pastaCarregada: !!rootFolderId,
+      tokenExpiraEmMin: expiry ? Math.round((expiry-Date.now())/60000) : null,
+    },
+    dados: {
+      eventos: (S.eventos||[]).length,
+      despesas: (S.despesas||[]).length,
+      despesasNaoSincronizadas: pendentes,
+      eventoAtivo: S.eventoAtivo||'',
+    },
+    log: diagLog.slice(),
+  };
+}
+
+// Reduz o print pra no máx. 1280px em JPEG — foto de celular crua passa
+// fácil de 5MB e deixaria o envio lento (ou estouraria o limite do Apps Script).
+function reduzirImagem(file){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    const url=URL.createObjectURL(file);
+    img.onload=()=>{
+      const esc=Math.min(1,1280/Math.max(img.width,img.height));
+      const c=document.createElement('canvas');
+      c.width=Math.round(img.width*esc); c.height=Math.round(img.height*esc);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg',0.75));
+    };
+    img.onerror=()=>{ URL.revokeObjectURL(url); reject(new Error('imagem inválida')); };
+    img.src=url;
+  });
+}
+
+async function enviarRelato(){
+  const tipo=document.getElementById('relato-tipo').value;
+  const msg=document.getElementById('relato-msg').value.trim();
+  const st=document.getElementById('relato-status');
+  const btn=document.getElementById('relato-enviar');
+  if(!msg){ st.style.color='var(--red)'; st.textContent=tipo==='sugestao'?'⚠️ Escreva sua ideia antes de enviar.':'⚠️ Descreva o problema antes de enviar.'; return; }
+  if(!RELATOS_URL){ st.style.color='var(--red)'; st.textContent='⚠️ Envio de relatos ainda não configurado.'; return; }
+  if(!navigator.onLine){ st.style.color='var(--red)'; st.textContent='⚠️ Sem internet agora — tente de novo quando voltar.'; return; }
+
+  btn.disabled=true;
+  st.style.color='var(--text2)'; st.textContent='Enviando...';
+  let print=null;
+  const f=document.getElementById('relato-print').files[0];
+  if(f){ try{ print=await reduzirImagem(f); }catch(e){ registrarDiag('relato',['print não pôde ser lido: '+e.message]); } }
+
+  const corpo=JSON.stringify({
+    id: Date.now().toString(36)+Math.random().toString(36).slice(2,8), // dedupe do reenvio abaixo
+    tipo,
+    nome: (S.prestador&&S.prestador.nome)||(currentUser&&currentUser.name)||'',
+    email: (currentUser&&currentUser.email)||(S.prestador&&S.prestador.email)||'',
+    mensagem: msg,
+    versao: document.lastModified,
+    print,
+    // Sugestão não leva diagnóstico técnico — o aviso do formulário promete só nome e e-mail.
+    diag: tipo==='sugestao' ? {} : coletarDiagnostico(),
+  });
+  try{
+    // Corpo como texto puro (sem Content-Type JSON) evita o preflight de CORS,
+    // que o Apps Script não responde.
+    const r=await fetch(RELATOS_URL,{method:'POST', body:corpo});
+    const j=await r.json().catch(()=>({ok:r.ok}));
+    if(!j.ok) throw new Error(j.erro||('HTTP '+r.status));
+  }catch(e){
+    // Se só a leitura da resposta falhou por CORS, o relato pode já ter chegado —
+    // manda de novo "às cegas" (no-cors) em vez de perder o relato.
+    if(e instanceof TypeError){
+      try{ await fetch(RELATOS_URL,{method:'POST', body:corpo, mode:'no-cors'}); }
+      catch(e2){ return falhaRelato(e2); }
+    } else {
+      return falhaRelato(e);
+    }
+  }
+  st.style.color='var(--green)'; st.textContent=tipo==='sugestao'?'✅ Recebemos sua sugestão. Obrigado!':'✅ Recebemos seu relato. Obrigado!';
+  setTimeout(()=>closeModal('modal-relato'),1800);
+
+  function falhaRelato(err){
+    console.error('Relato: falha no envio', err);
+    btn.disabled=false;
+    st.style.color='var(--red)'; st.textContent='⚠️ Não consegui enviar agora. Tente de novo em instantes.';
+  }
+}
+
 // Registrar Service Worker para PWA instalável.
 // Precisa ser um arquivo real (./sw.js) — navegadores rejeitam registro de
 // service worker a partir de uma blob: URL (era assim antes; o registro
@@ -4131,6 +4294,29 @@ initGoogle();
       </div>
     </div>
     <button class="btn btn-primary mt16" onclick="closeModal('modal-ajuda');iniciarTour()">▶️ Ver tour interativo</button>
+    <button class="btn mt8" onclick="closeModal('modal-ajuda');abrirRelato()">💬 Relatar problema ou sugerir melhoria</button>
+  </div>
+</div>
+
+<!-- MODAL RELATAR PROBLEMA -->
+<div class="modal-overlay" id="modal-relato">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('modal-relato')">✕</button>
+    <h2>💬 Fale com a gente</h2>
+    <label>Tipo</label>
+    <select id="relato-tipo" onchange="ajustarRelatoTipo()">
+      <option value="problema">🐞 Relatar um problema</option>
+      <option value="sugestao">💡 Sugerir uma melhoria</option>
+    </select>
+    <label id="relato-msg-label">O que aconteceu?</label>
+    <textarea id="relato-msg" rows="5" maxlength="5000" placeholder="Ex: fui lançar uma despesa e apareceu &quot;sem conexão&quot;, mesmo com internet boa." style="width:100%;resize:vertical"></textarea>
+    <label id="relato-print-label">Print da tela (opcional)</label>
+    <input type="file" id="relato-print" accept="image/*" />
+    <div id="relato-aviso" style="font-size:12px;color:var(--text3);margin-top:10px;line-height:1.5">
+      Vão junto, automaticamente: seu nome e e-mail, aparelho/navegador, situação da conexão e os últimos erros do app. Nenhuma senha ou dado bancário é enviado.
+    </div>
+    <div id="relato-status" style="font-size:13px;margin-top:10px"></div>
+    <button class="btn btn-primary mt16" id="relato-enviar" onclick="enviarRelato()">📨 Enviar</button>
   </div>
 </div>
 

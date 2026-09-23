@@ -497,7 +497,7 @@ textarea{resize:vertical;min-height:68px}
       🚗 Uber/99: envie PDF com trajeto completo.
     </div>
     <div class="slabel">Suporte</div>
-    <div class="info-card" style="font-size:13px">
+    <div class="info-card" id="cfg-suporte" style="font-size:13px">
       <div style="color:var(--text2);margin-bottom:10px;line-height:1.6">
         Algo não funcionou ou tem uma ideia pra melhorar o app? Conte pra gente — nos problemas, as informações técnicas do app vão junto pra facilitar a correção.
       </div>
@@ -511,7 +511,7 @@ textarea{resize:vertical;min-height:68px}
       <input type="file" id="backup-input" accept=".json" onchange="importarBackup(event)" style="display:none" />
     </div>
     <div class="slabel">Instalar app</div>
-    <div class="info-card" style="font-size:13px">
+    <div class="info-card" id="cfg-instalar" style="font-size:13px">
       <div id="install-info" style="color:var(--text2);margin-bottom:10px;line-height:1.6">
         Instale o app na tela inicial para acesso rápido com o ícone da IGD.
       </div>
@@ -3710,8 +3710,23 @@ const TOUR_STEPS = [
   {
     title: '⚙️ Seus dados',
     desc: 'Na aba Dados ficam seus dados pessoais e bancários, que saem impressos na nota. Vale conferir antes do primeiro envio.',
-    dica: 'Achou um problema ou teve uma ideia? Nessa aba tem um botão pra falar com a gente.',
+    dica: 'Capriche nos dados bancários: é pra essa conta que o reembolso vai.',
     tab: 'config', alvo: ['#tab-config']
+  },
+  {
+    title: '💬 Fale com a gente',
+    desc: 'Algo não funcionou ou teve uma ideia pra melhorar o app? Toque em "Relatar problema ou sugerir melhoria" e conte pra gente.',
+    dica: 'Nos problemas, as informações técnicas do app vão junto — isso ajuda muito a resolver rápido. Também dá pra abrir pelo ? no topo.',
+    tab: 'config', alvo: ['#cfg-suporte']
+  },
+  {
+    title: '📲 Instale o app',
+    desc: 'Coloque o app na tela inicial do celular: ele abre direto, em tela cheia e com o ícone da IGD, como qualquer outro app.',
+    // Quem já abre pelo app instalado não precisa do convite — só saber onde fica.
+    descInstalado: 'Seu app já está instalado na tela inicial. Se trocar de celular, é por aqui que você instala de novo.',
+    dica: 'Se o botão não instalar direto, ele mostra o passo a passo pro seu celular.',
+    dicaInstalado: '',
+    tab: 'config', alvo: ['#cfg-instalar']
   },
   {
     title: '☁️ Salvo no seu Drive',
@@ -3909,8 +3924,10 @@ function renderTourStep(){
     document.getElementById('tour-step-label').textContent = `Passo ${tourStep+1} de ${total}`;
     document.getElementById('tour-progress-bar').style.width = ((tourStep+1)/total*100)+'%';
     document.getElementById('tour-title').textContent = step.title;
-    document.getElementById('tour-desc').textContent = (alternativo && step.descAlt) || step.desc;
-    const dica = (tourDemo && step.dicaDemo) || step.dica;
+    const instalado = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    document.getElementById('tour-desc').textContent =
+      (instalado && step.descInstalado) || (alternativo && step.descAlt) || step.desc;
+    const dica = (instalado && 'dicaInstalado' in step) ? step.dicaInstalado : ((tourDemo && step.dicaDemo) || step.dica);
     document.getElementById('tour-dica').textContent = dica ? '💡 ' + dica : '';
     marcarAbaTour(step, navBtn ? 'indo' : mudouAba ? 'mudou' : '');
 
@@ -3940,12 +3957,31 @@ function renderTourStep(){
 // botões mais abaixo (Gerar PDF, e-mail) ficavam fora da tela ou atrás da caixa.
 function irAoAlvoTour(alvo, reduzir, seq){
   tourAlvo = alvo;
-  if(alvo) alvo.scrollIntoView({block:'center', behavior: reduzir ? 'auto' : 'smooth'});
+  if(alvo) rolarParaAlvoTour(alvo, reduzir);
   tourTimer = setTimeout(()=>{
     if(seq !== tourSeq) return;
     posicionarTour();
     document.getElementById('tour-box').classList.remove('trocando');
   }, alvo && !reduzir ? 380 : 0);
+}
+
+// Rola de modo que o alvo E a caixa (logo abaixo dele) caibam juntos entre o
+// cabeçalho e a barra de abas. Só centralizar o alvo deixava casos (ex: card
+// de Suporte) em que a caixa não cabia nem acima nem abaixo e cobria o botão.
+// Alvo na barra de abas (fixa) não precisa de rolagem.
+function rolarParaAlvoTour(alvo, reduzir){
+  if(alvo.closest('.nav, .hdr')) return;
+  const comportamento = reduzir ? 'auto' : 'smooth';
+  const hdr = document.querySelector('.hdr'), nav = document.querySelector('.nav');
+  const topoUtil = hdr ? hdr.getBoundingClientRect().bottom : 0;
+  const baseUtil = nav ? nav.getBoundingClientRect().top : window.innerHeight;
+  const bh = document.getElementById('tour-box').offsetHeight;
+  const r = alvo.getBoundingClientRect();
+  const folga = 34; // contorno + espaço entre alvo e caixa
+  const sobra = (baseUtil - topoUtil) - (r.height + bh + folga);
+  if(sobra < 0){ alvo.scrollIntoView({block:'center', behavior: comportamento}); return; }
+  const topoDesejado = topoUtil + sobra / 2 + 6;
+  window.scrollBy({top: r.top - topoDesejado, behavior: comportamento});
 }
 
 // Etiqueta "📍 Aba X" da caixa. estado: 'indo' (a caminho da aba nova),

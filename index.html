@@ -196,19 +196,40 @@ textarea{resize:vertical;min-height:68px}
 #sync-status{display:inline-flex;align-items:center;gap:5px}
 #sync-status .nd-spinner{width:10px;height:10px;border-width:1.5px}
 
-/* Tutorial */
+/* Tutorial — o destaque é um "recorte": a sombra gigante do .tour-highlight
+   escurece a tela toda menos o elemento. Sem alvo (boas-vindas/final), quem
+   escurece é o próprio backdrop (.tour-overlay.sem-alvo). */
 .tour-overlay{display:none;position:fixed;inset:0;z-index:500}
 .tour-overlay.active{display:block}
-.tour-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:501;cursor:pointer}
-.tour-box{position:fixed;z-index:502;background:var(--bg);border-radius:16px;padding:20px;width:calc(100% - 48px);max-width:380px;box-shadow:0 8px 32px rgba(0,0,0,.3)}
-.tour-box h3{font-size:17px;font-weight:700;margin-bottom:8px}
-.tour-box p{font-size:14px;color:var(--text2);line-height:1.6;margin-bottom:16px}
-.tour-box .tour-step{font-size:11px;color:var(--text2);margin-bottom:12px}
+.tour-backdrop{position:fixed;inset:0;background:transparent;z-index:501;transition:background .3s}
+.tour-overlay.sem-alvo .tour-backdrop{background:rgba(0,0,0,.65)}
+.tour-highlight{position:fixed;z-index:502;border-radius:12px;pointer-events:none;
+  box-shadow:0 0 0 9999px rgba(0,0,0,.65),0 0 0 3px var(--primary);
+  transition:left .35s ease,top .35s ease,width .35s ease,height .35s ease,opacity .25s}
+.tour-highlight::after{content:'';position:absolute;inset:-3px;border-radius:14px;border:3px solid var(--primary);animation:tour-pulso 1.6s ease-out infinite}
+@keyframes tour-pulso{0%{opacity:.9;transform:scale(1)}100%{opacity:0;transform:scale(1.12)}}
+.tour-box{position:fixed;z-index:503;background:var(--bg);border-radius:16px;padding:18px 18px 14px;width:calc(100% - 32px);max-width:380px;
+  box-shadow:0 10px 36px rgba(0,0,0,.35);left:50%;transform:translateX(-50%);
+  transition:top .35s ease,opacity .2s ease}
+.tour-box.trocando{opacity:0}
+.tour-box .tour-top{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.tour-box .tour-step{font-size:11px;color:var(--text2);flex:1}
+.tour-progress{height:3px;background:var(--bg3);border-radius:3px;overflow:hidden;margin-bottom:12px}
+.tour-progress > div{height:100%;background:var(--primary);transition:width .35s ease}
+.tour-close{background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:0 2px;line-height:1}
+.tour-box h3{font-size:17px;font-weight:700;margin-bottom:6px}
+.tour-box p{font-size:14px;color:var(--text2);line-height:1.55;margin-bottom:10px}
+.tour-dica{font-size:12.5px;line-height:1.5;background:var(--amber-bg);color:var(--amber);border-radius:10px;padding:8px 10px;margin-bottom:12px}
+.tour-dica:empty{display:none}
 .tour-nav{display:flex;gap:8px;align-items:center}
-.tour-dots{display:flex;gap:6px;flex:1;justify-content:center}
-.tour-dot{width:8px;height:8px;border-radius:50%;background:var(--border2);transition:background .2s}
-.tour-dot.active{background:var(--primary)}
-.tour-highlight{position:fixed;z-index:502;border-radius:12px;box-shadow:0 0 0 4px #fff,0 0 0 7px rgba(255,255,255,.3);pointer-events:none;transition:all .3s}
+.tour-dots{display:flex;gap:5px;justify-content:center;flex-wrap:wrap;margin-bottom:12px}
+.tour-dot{width:7px;height:7px;border-radius:50%;background:var(--border2);transition:background .2s,width .2s;border:none;padding:0;cursor:pointer}
+.tour-dot.active{background:var(--primary);width:18px;border-radius:4px}
+.tour-dot.visto{background:color-mix(in srgb,var(--primary) 45%,var(--border2))}
+@media (prefers-reduced-motion:reduce){
+  .tour-highlight,.tour-box,.tour-progress > div{transition:none}
+  .tour-highlight::after{animation:none}
+}
 .btn-help{background:var(--bg2);border:.5px solid var(--border2);border-radius:50%;width:30px;height:30px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text2);flex-shrink:0}
 </style>
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
@@ -369,7 +390,7 @@ textarea{resize:vertical;min-height:68px}
     <div class="slabel" style="margin:16px 0 8px">Nota fiscal / comprovante</div>
     <div class="alert a-warn" style="margin-bottom:8px">⚠️ Guarde o cupom fiscal em papel até o reembolso cair na conta. A foto é um apoio — só jogue o original fora depois de receber.</div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+    <div id="comprovante-btns" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
       <div class="drop" onclick="document.getElementById('file-camera').click()" style="margin-top:0">
         <div class="di"><svg class="icon"><use href="#i-camera"/></svg></div>
         <p>Câmera</p>
@@ -1382,6 +1403,8 @@ function mostrarApp(){
     hdrUser.textContent=S.prestador.nome;
   }
   initApp();
+  // Convite pro tour na primeira vez (a função já existia, mas nunca era chamada).
+  if(!localStorage.getItem('nd_tour_done')) setTimeout(mostrarBannerTutorial, 1200);
 }
 
 function finalizarSetup(){
@@ -3618,69 +3641,101 @@ function atualizarBtnTema(){
 // ─── TUTORIAL / TOUR ─────────────────────────────────────────
 const TOUR_STEPS = [
   {
-    title: '👋 Bem-vindo ao app!',
-    desc: 'Este é o seu app de Nota de Débito. Em poucos passos você aprende tudo. Vamos lá?',
-    tab: null, selector: null
+    title: '👋 Bem-vindo!',
+    desc: 'Em 1 minuto você vê o caminho completo: do cadastro do evento até o reembolso cair na conta.',
+    dica: 'Use ← Voltar pra rever um passo, ou toque nas bolinhas abaixo pra pular direto.'
   },
   {
-    title: '📅 1. Cadastre o evento',
-    desc: 'Comece sempre criando o evento. Informe as datas completas de deslocamento — inclua o dia de ida e o de volta, não só os dias do evento.',
-    tab: 'eventos', selector: '#screen-eventos .btn-primary'
+    title: '📅 Crie o evento',
+    desc: 'Tudo começa pelo evento. Toque em "Novo" e informe nome, cidade, a empresa que vai reembolsar e as datas.',
+    dica: 'Use as datas de deslocamento: do dia da ida até o dia da volta — não só os dias do evento.',
+    tab: 'eventos', alvo: ['#screen-eventos .btn-primary']
   },
   {
-    title: '➕ 2. Tipo de despesa',
-    desc: 'Selecione Transporte, Alimentação ou Outro. A descrição é gerada automaticamente com o dia calculado pela data.',
-    tab: 'lancar', selector: '.tipo-grid'
+    title: '👆 Evento ativo',
+    desc: 'O evento destacado é o ativo: toda despesa que você lançar vai pra ele. Pra trocar, é só tocar em outro card.',
+    tab: 'eventos', alvo: ['#eventos-list .ev-card'], opcional: true
   },
   {
-    title: '📅 3. Data da despesa',
-    desc: 'Escolha a data do gasto. O app calcula automaticamente qual é o Dia 1, Dia 2... baseado na data de início do evento.',
-    tab: 'lancar', selector: '#data'
+    title: '🧾 Tipo de despesa',
+    desc: 'Na aba Lançar, escolha Transporte, Alimentação ou Outro. A descrição da despesa é montada sozinha.',
+    tab: 'lancar', alvo: ['.tipo-grid']
   },
   {
-    title: '📎 4. Comprovantes',
-    desc: 'Tire foto com 📷 Câmera ou escolha um 📄 Arquivo (foto salva ou PDF do Uber/99). Pode anexar vários por despesa.',
-    tab: 'lancar', selector: '#file-camera'
+    title: '📆 Data e valor',
+    desc: 'Informe a data do gasto e, logo abaixo, o valor. O app descobre sozinho se foi no Dia 1, Dia 2... do evento.',
+    tab: 'lancar', alvo: ['#data']
   },
   {
-    title: '📋 5. Confira as despesas',
-    desc: 'Veja tudo que lançou, reordene com as setinhas ▲▼ e edite qualquer item tocando no ✏️.',
-    tab: 'despesas', selector: '#tab-despesas'
+    title: '📎 Comprovantes',
+    desc: 'Tire a foto do cupom com 📷 Câmera ou escolha um 📄 Arquivo (foto da galeria ou PDF). Dá pra anexar vários na mesma despesa.',
+    dica: 'Uber/99: anexe o PDF com o trajeto completo. Prints de tela do banco não são aceitos.',
+    tab: 'lancar', alvo: ['#comprovante-btns']
   },
   {
-    title: '📥 6. Gere o PDF',
-    desc: 'Confira o resumo por categoria e gere o PDF. O arquivo inclui a nota de débito + todos os comprovantes em um único arquivo.',
-    tab: 'gerar', selector: '#btn-gerar-pdf'
+    title: '🔗 Nota fiscal pelo QR code',
+    desc: 'Toque no ícone e aponte a câmera pro QR code do cupom fiscal pra puxar o link da NF-e — ou cole o link no campo ao lado.',
+    dica: 'Guarde o cupom em papel até o reembolso cair na conta.',
+    tab: 'lancar', alvo: ['#nf-input-row']
   },
   {
-    title: '📧 7. Envie para o financeiro',
-    desc: 'Toque em "Preparar e-mail para o financeiro" — o app abre seu e-mail já preenchido com destinatário, assunto e mensagem. Só anexe o PDF e envie!',
-    tab: 'gerar', selector: '#btn-enviar-email'
+    title: '📋 Confira as despesas',
+    desc: 'Aqui fica tudo que você lançou no evento, com o total por categoria. Reordene com ▲▼ e toque no ✏️ pra editar.',
+    tab: 'despesas', alvo: ['#despesas-list .exp-row', '#tab-despesas']
   },
   {
-    title: '☑️ 8. Finalize o evento',
-    desc: 'Após receber o reembolso, clique em "Finalizar" no evento para removê-lo do app. O PDF fica salvo no seu Google Drive.',
-    tab: 'eventos', selector: null
+    title: '📥 Gere o PDF',
+    desc: 'Confira os dados da nota e gere o PDF: a nota de débito + todos os comprovantes num arquivo só.',
+    tab: 'gerar', alvo: ['#btn-gerar-pdf']
+  },
+  {
+    title: '📧 Envie ao financeiro',
+    desc: 'O app abre seu e-mail já com destinatário, assunto e mensagem prontos. Só anexar o PDF e enviar!',
+    tab: 'gerar', alvo: ['#btn-enviar-email']
+  },
+  {
+    title: '☑️ Finalize o evento',
+    desc: 'Depois que o reembolso cair, toque em "Finalizar" no card do evento. Você escolhe arquivar ou apagar — o PDF continua salvo no seu Google Drive.',
+    // Sem evento ainda não existe botão "Finalizar" — destaca o "Novo" com um texto que faça sentido.
+    descAlt: 'Cada evento que você criar aqui ganha um botão "Finalizar". Depois que o reembolso cair, é só tocar nele e escolher arquivar ou apagar — o PDF continua salvo no seu Google Drive.',
+    tab: 'eventos', alvo: ['#eventos-list .tag-btn', '#screen-eventos .btn-primary']
+  },
+  {
+    title: '⚙️ Seus dados',
+    desc: 'Na aba Dados ficam seus dados pessoais e bancários, que saem impressos na nota. Vale conferir antes do primeiro envio.',
+    dica: 'Achou um problema ou teve uma ideia? Nessa aba tem um botão pra falar com a gente.',
+    tab: 'config', alvo: ['#tab-config']
+  },
+  {
+    title: '☁️ Salvo no seu Drive',
+    desc: 'Tudo fica guardado no seu Google Drive. Aqui em cima aparece se está salvando, se já salvou ou se algo deu errado.',
+    alvo: ['#sync-status', '.hdr']
   },
   {
     title: '✅ Pronto!',
-    desc: 'Toque em ? a qualquer momento para rever este guia. Bom trabalho! 🚀',
-    tab: null, selector: null
+    desc: 'Toque no ? lá em cima a qualquer momento pra rever este tour. Bons eventos! 🚀'
   }
 ];
 
 let tourStep = 0;
+let tourDirecao = 1;          // 1 = avançando, -1 = voltando (pra pular passo opcional no sentido certo)
+let tourVistos = new Set();
+let tourAlvo = null;
+let tourTimer = null;
+let tourRaf = null;
 
 function mostrarBannerTutorial(){
+  if(document.getElementById('banner-tutorial')) return;
   const banner = document.createElement('div');
   banner.id = 'banner-tutorial';
-  banner.style.cssText = `position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+  // bottom acima da barra de abas (fixa no rodapé) — com 24px o banner ficava por cima dela.
+  banner.style.cssText = `position:fixed;bottom:calc(76px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);
     background:var(--primary);color:var(--primary-fg);
-    padding:14px 20px;border-radius:14px;z-index:300;
+    padding:14px 16px;border-radius:14px;z-index:300;
     box-shadow:0 4px 20px rgba(0,0,0,.3);
     display:flex;align-items:center;gap:12px;
     font-family:-apple-system,sans-serif;font-size:14px;
-    max-width:calc(100% - 48px);width:380px`;
+    max-width:calc(100% - 32px);width:380px`;
   banner.innerHTML = `
     <span style="font-size:24px">👋</span>
     <div style="flex:1">
@@ -3689,77 +3744,172 @@ function mostrarBannerTutorial(){
     </div>
     <button onclick="document.getElementById('banner-tutorial').remove();iniciarTour()"
       style="background:#fff;color:#000;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap">
-      Ver tutorial
+      Ver tour
     </button>
     <button onclick="document.getElementById('banner-tutorial').remove();localStorage.setItem('nd_tour_done','1')"
+      aria-label="Dispensar"
       style="background:none;border:none;color:var(--primary-fg);cursor:pointer;font-size:20px;opacity:.7;padding:0 4px">✕</button>`;
   document.body.appendChild(banner);
 }
 
 function iniciarTour(){
   closeModal('modal-ajuda');
+  document.getElementById('banner-tutorial')?.remove();
   tourStep = 0;
+  tourDirecao = 1;
+  tourVistos = new Set();
   document.getElementById('tour-overlay').classList.add('active');
+  window.addEventListener('scroll', agendarPosicaoTour, {passive:true});
+  window.addEventListener('resize', agendarPosicaoTour);
+  document.addEventListener('keydown', teclaTour);
   renderTourStep();
 }
 
+// Primeiro elemento VISÍVEL entre os seletores do passo — um input escondido
+// (ex: o <input type=file> da câmera) ou algo de uma aba inativa tem tamanho 0,
+// e era isso que jogava o destaque pro canto da tela.
+// Retorna também qual seletor bateu: 0 = o alvo principal, >0 = um alternativo.
+function acharAlvoTour(step){
+  const seletores = step.alvo || [];
+  for(let i = 0; i < seletores.length; i++){
+    const el = [...document.querySelectorAll(seletores[i])].find(e => {
+      const r = e.getBoundingClientRect();
+      return r.width > 4 && r.height > 4;
+    });
+    if(el) return { el, alternativo: i > 0 };
+  }
+  return { el: null, alternativo: false };
+}
+
 function renderTourStep(){
-  const step = TOUR_STEPS[tourStep];
   const total = TOUR_STEPS.length;
+  const step = TOUR_STEPS[tourStep];
+  if(step.tab) go(step.tab);
 
-  document.getElementById('tour-step-label').textContent = `Passo ${tourStep+1} de ${total}`;
-  document.getElementById('tour-title').textContent = step.title;
-  document.getElementById('tour-desc').textContent = step.desc;
-
-  // Dots
-  document.getElementById('tour-dots').innerHTML = TOUR_STEPS.map((_,i)=>
-    `<div class="tour-dot${i===tourStep?' active':''}"></div>`).join('');
-
-  // Botão final
-  const btn = document.getElementById('tour-next-btn');
-  btn.textContent = tourStep === total-1 ? '✅ Concluir' : 'Próximo →';
-
-  // Navegar para a aba do step
-  if(step.tab){
-    go(step.tab);
+  const { el: alvo, alternativo } = acharAlvoTour(step);
+  // Passo que depende de dado da pessoa (ex: ainda não tem evento) — pula no
+  // sentido em que ela está navegando, em vez de mostrar um destaque vazio.
+  if(!alvo && step.opcional){
+    const prox = tourStep + tourDirecao;
+    if(prox >= 0 && prox < total){ tourStep = prox; return renderTourStep(); }
   }
+  tourVistos.add(tourStep);
+  tourAlvo = alvo;
 
-  // Highlight do elemento
-  const hl = document.getElementById('tour-highlight');
-  if(step.selector){
-    setTimeout(()=>{
-      const el = document.querySelector(step.selector);
-      if(el){
-        const rect = el.getBoundingClientRect();
-        hl.style.cssText = `position:fixed;z-index:502;border-radius:12px;
-          box-shadow:0 0 0 4px #fff,0 0 0 7px rgba(255,255,255,.3);pointer-events:none;
-          left:${rect.left-6}px;top:${rect.top-6}px;
-          width:${rect.width+12}px;height:${rect.height+12}px`;
-      } else { hl.style.cssText='display:none'; }
-    }, 300);
-  } else {
-    hl.style.cssText = 'display:none';
-  }
+  const reduzir = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Rola até o alvo ANTES de medir — antes o tour media com a tela no topo, e
+  // botões mais abaixo (Gerar PDF, e-mail) ficavam fora da tela ou atrás da caixa.
+  if(alvo) alvo.scrollIntoView({block:'center', behavior: reduzir ? 'auto' : 'smooth'});
 
-  // Posicionar a caixa sempre centralizada
   const box = document.getElementById('tour-box');
-  box.style.cssText = 'bottom:80px;left:50%;transform:translateX(-50%);position:fixed;z-index:502';
+  box.classList.add('trocando');
+  clearTimeout(tourTimer);
+  tourTimer = setTimeout(()=>{
+    document.getElementById('tour-step-label').textContent = `Passo ${tourStep+1} de ${total}`;
+    document.getElementById('tour-progress-bar').style.width = ((tourStep+1)/total*100)+'%';
+    document.getElementById('tour-title').textContent = step.title;
+    document.getElementById('tour-desc').textContent = (alternativo && step.descAlt) || step.desc;
+    document.getElementById('tour-dica').textContent = step.dica ? '💡 ' + step.dica : '';
+
+    document.getElementById('tour-dots').innerHTML = TOUR_STEPS.map((s,i)=>
+      `<button class="tour-dot${i===tourStep?' active':tourVistos.has(i)?' visto':''}" onclick="irParaTour(${i})" aria-label="Ir para o passo ${i+1}: ${s.title.replace(/"/g,'')}"></button>`).join('');
+
+    document.getElementById('tour-back-btn').style.visibility = tourStep === 0 ? 'hidden' : 'visible';
+    document.getElementById('tour-next-btn').textContent =
+      tourStep === total-1 ? '✅ Concluir' : tourStep === 0 ? 'Começar →' : 'Próximo →';
+
+    posicionarTour();
+    box.classList.remove('trocando');
+  }, alvo && !reduzir ? 380 : 120);
+}
+
+function agendarPosicaoTour(){
+  if(tourRaf) return;
+  tourRaf = requestAnimationFrame(()=>{ tourRaf = null; posicionarTour(); });
+}
+
+// Destaca o alvo e coloca a caixa abaixo dele (ou acima, se não couber),
+// sempre dentro da área entre o cabeçalho e a barra de abas.
+function posicionarTour(){
+  const ov = document.getElementById('tour-overlay');
+  if(!ov.classList.contains('active')) return;
+  const hl = document.getElementById('tour-highlight');
+  const box = document.getElementById('tour-box');
+  const vh = window.innerHeight;
+  const margem = 12;
+  const bh = box.offsetHeight;
+  const hdr = document.querySelector('.hdr');
+  const nav = document.querySelector('.nav');
+  const topoUtil = hdr ? hdr.getBoundingClientRect().bottom + 8 : margem;
+  const baseUtil = nav ? nav.getBoundingClientRect().top - 8 : vh - margem;
+
+  if(!tourAlvo || !document.body.contains(tourAlvo)){
+    ov.classList.add('sem-alvo');
+    hl.style.opacity = '0';
+    box.style.top = Math.max(margem, (vh - bh) / 2) + 'px';
+    return;
+  }
+  ov.classList.remove('sem-alvo');
+  const r = tourAlvo.getBoundingClientRect();
+  const pad = 6;
+  // Contorno limitado à tela — alvo encostado na borda (ex: aba "dados", no
+  // canto da barra inferior) tinha o contorno cortado.
+  const vw = document.documentElement.clientWidth;
+  const hlL = Math.max(3, r.left - pad), hlR = Math.min(vw - 3, r.right + pad);
+  const hlT = Math.max(3, r.top - pad),  hlB = Math.min(vh - 3, r.bottom + pad);
+  hl.style.opacity = '1';
+  hl.style.left = hlL + 'px';
+  hl.style.top = hlT + 'px';
+  hl.style.width = (hlR - hlL) + 'px';
+  hl.style.height = (hlB - hlT) + 'px';
+
+  const abaixo = r.bottom + pad + 14;
+  const acima = r.top - pad - 14 - bh;
+  let top;
+  if(abaixo + bh <= baseUtil) top = abaixo;
+  else if(acima >= Math.min(topoUtil, r.top)) top = acima;
+  // Alvo grande demais pra caber a caixa em volta: fica no lado oposto ao centro dele.
+  else top = (r.top + r.bottom) / 2 < vh / 2 ? baseUtil - bh : topoUtil;
+  box.style.top = Math.max(margem, Math.min(top, vh - bh - margem)) + 'px';
+}
+
+function teclaTour(e){
+  if(e.key === 'ArrowRight'){ e.preventDefault(); proximoTour(); }
+  else if(e.key === 'ArrowLeft'){ e.preventDefault(); voltarTour(); }
+  else if(e.key === 'Escape'){ e.preventDefault(); pularTour(); }
 }
 
 function proximoTour(){
-  if(tourStep >= TOUR_STEPS.length-1){
-    pularTour();
-    localStorage.setItem('nd_tour_done','1');
-    return;
-  }
+  if(tourStep >= TOUR_STEPS.length-1){ pularTour(); return; }
+  tourDirecao = 1;
   tourStep++;
   renderTourStep();
 }
 
+function voltarTour(){
+  if(tourStep <= 0) return;
+  tourDirecao = -1;
+  tourStep--;
+  renderTourStep();
+}
+
+function irParaTour(i){
+  if(i === tourStep) return;
+  tourDirecao = i > tourStep ? 1 : -1;
+  tourStep = i;
+  renderTourStep();
+}
+
 function pularTour(){
-  document.getElementById('tour-overlay').classList.remove('active');
-  document.getElementById('tour-highlight').style.cssText='display:none';
+  clearTimeout(tourTimer);
+  document.getElementById('tour-overlay').classList.remove('active','sem-alvo');
+  document.getElementById('tour-highlight').style.opacity = '0';
+  window.removeEventListener('scroll', agendarPosicaoTour);
+  window.removeEventListener('resize', agendarPosicaoTour);
+  document.removeEventListener('keydown', teclaTour);
+  tourAlvo = null;
   localStorage.setItem('nd_tour_done','1');
+  go('eventos'); // não deixa a pessoa largada na última aba que o tour abriu
 }
 
 function abrirAjuda(){
@@ -4321,16 +4471,22 @@ initGoogle();
 </div>
 
 <!-- TOUR OVERLAY -->
-<div class="tour-overlay" id="tour-overlay">
-  <div class="tour-backdrop" onclick="pularTour()"></div>
+<div class="tour-overlay" id="tour-overlay" role="dialog" aria-modal="true" aria-labelledby="tour-title">
+  <div class="tour-backdrop"></div>
   <div class="tour-highlight" id="tour-highlight"></div>
   <div class="tour-box" id="tour-box">
-    <div class="tour-step" id="tour-step-label"></div>
+    <div class="tour-top">
+      <div class="tour-step" id="tour-step-label"></div>
+      <button class="tour-close" onclick="pularTour()" title="Fechar tour" aria-label="Fechar tour">✕</button>
+    </div>
+    <div class="tour-progress"><div id="tour-progress-bar"></div></div>
     <h3 id="tour-title"></h3>
     <p id="tour-desc"></p>
+    <div class="tour-dica" id="tour-dica"></div>
+    <div class="tour-dots" id="tour-dots"></div>
     <div class="tour-nav">
-      <button class="btn btn-sm btn-ghost" onclick="pularTour()" style="width:auto;font-size:12px">Pular</button>
-      <div class="tour-dots" id="tour-dots"></div>
+      <button class="btn btn-sm btn-ghost" id="tour-back-btn" onclick="voltarTour()" style="width:auto;font-size:12px">← Voltar</button>
+      <div style="flex:1"></div>
       <button class="btn btn-sm btn-primary" id="tour-next-btn" onclick="proximoTour()" style="width:auto">Próximo →</button>
     </div>
   </div>

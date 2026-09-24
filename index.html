@@ -250,8 +250,6 @@ textarea{resize:vertical;min-height:68px}
 }
 .btn-help{background:var(--bg2);border:.5px solid var(--border2);border-radius:50%;width:30px;height:30px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text2);flex-shrink:0}
 </style>
-<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-<script src="https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 </head>
 <body>
 <svg style="display:none">
@@ -566,8 +564,38 @@ textarea{resize:vertical;min-height:68px}
   <button class="qr-cancel" onclick="pararQR()" style="position:absolute;bottom:36px">✕ Cancelar</button>
 </div>
 
-<script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
 <script>
+// ─── BIBLIOTECAS SOB DEMANDA ──────────────────────────────────
+// PDF (pdf-lib + html2canvas) e leitor de QR (zxing) somam ~1,1 MB e só são
+// usados ao gerar o PDF / ler QR code. Antes vinham em <script> no <head> e a
+// tela inteira esperava o download terminar pra começar a abrir. Agora são
+// baixados depois que o app já está na tela (precarregarLibs) e, se a pessoa
+// for usar antes disso, carregarLib() espera o download ali mesmo.
+// zxing fixado na versão: "@latest" fazia um redirecionamento a mais toda vez
+// e atrapalhava o cache (era a 0.23.0 que o @latest entregava).
+const LIBS={
+  pdf:'https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js',
+  canvas:'https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js',
+  zxing:'https://unpkg.com/@zxing/library@0.23.0/umd/index.min.js',
+};
+const libsCarregando={};
+function carregarLib(nome){
+  if(!libsCarregando[nome]){
+    libsCarregando[nome]=new Promise((ok,falha)=>{
+      const el=document.createElement('script');
+      el.src=LIBS[nome];
+      el.onload=ok;
+      el.onerror=()=>{ delete libsCarregando[nome]; el.remove(); falha(new Error('não consegui baixar um componente do app — confira a internet e tente de novo')); };
+      document.head.appendChild(el);
+    });
+  }
+  return libsCarregando[nome];
+}
+function precarregarLibs(){
+  const vai=()=>Object.keys(LIBS).forEach(n=>carregarLib(n).catch(()=>{}));
+  if('requestIdleCallback' in window) requestIdleCallback(vai,{timeout:4000}); else setTimeout(vai,1500);
+}
+
 // ─── LOG DE DIAGNÓSTICO ───────────────────────────────────────
 // Guarda os últimos erros do app pra irem junto no "Relatar um problema" —
 // sem isso, uma reclamação como "deu sem conexão" chegava sem nenhuma pista da
@@ -952,6 +980,7 @@ async function iniciarDrive(){
     setSyncStatus('✓ conectado');
     // Baixa imagens em background, sem travar a tela
     restaurarImagensBackground().catch(e=>console.warn('Background image load error:',e));
+    precarregarLibs();
     return;
   }
 
@@ -960,6 +989,7 @@ async function iniciarDrive(){
   const ls=localStorage.getItem('nd_main');
   if(ls) try{S={...S,...JSON.parse(ls)};atualizarUltimoDespesaId();}catch(e3){}
   mostrarApp();
+  precarregarLibs();
 }
 
 // No login, a tela do Google deixa a pessoa desmarcar o acesso ao Drive. Aí o
@@ -1002,24 +1032,37 @@ async function getEventoFolderId(eventoId){
   return fid;
 }
 
+// Despesas de UM evento (sem imagens — app abre rápido). [] se não tiver/der erro.
+async function carregarDespesasEvento(ev){
+  try{
+    const fid = await getEventoFolderId(ev.id);
+    if(!fid) return [];
+    const q = `name='despesas.json' and trashed=false and '${fid}' in parents`;
+    const r = await driveReq('GET',
+      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`);
+    if(r.files && r.files.length > 0){
+      const desp = await lerArquivo(r.files[0].id);
+      if(Array.isArray(desp)) return desp;
+    }
+  }catch(e){ console.warn('Erro ao carregar despesas do evento:', ev.id, e); }
+  return [];
+}
+
 async function carregarTodasDespesas(){
   S.despesas = [];
+  // Eventos com pasta já conhecida são buscados todos ao mesmo tempo — antes era
+  // um evento por vez (3 consultas ao Drive cada, em fila), o que deixava a
+  // abertura lenta. Os sem pasta conhecida continuam um por vez: podem precisar
+  // CRIAR a pasta, e dois eventos com o mesmo nome criando em paralelo gerariam
+  // pasta duplicada. A ordem final das despesas segue a ordem dos eventos.
+  const resultado = new Map();
+  const comPasta = S.eventos.filter(ev => ev.driveFolderId);
+  const listas = await Promise.all(comPasta.map(carregarDespesasEvento));
+  comPasta.forEach((ev, i) => resultado.set(ev.id, listas[i]));
   for(const ev of S.eventos){
-    try{
-      const fid = await getEventoFolderId(ev.id);
-      if(!fid) continue;
-      const q = `name='despesas.json' and trashed=false and '${fid}' in parents`;
-      const r = await driveReq('GET',
-        `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`);
-      if(r.files && r.files.length > 0){
-        const desp = await lerArquivo(r.files[0].id);
-        if(Array.isArray(desp)){
-          // Carrega despesas SEM imagens primeiro — app abre rápido
-          S.despesas.push(...desp);
-        }
-      }
-    }catch(e){ console.warn('Erro ao carregar despesas do evento:', ev.id, e); }
+    if(!resultado.has(ev.id)) resultado.set(ev.id, await carregarDespesasEvento(ev));
   }
+  for(const ev of S.eventos) S.despesas.push(...resultado.get(ev.id));
   // Recupera despesas que ficaram só no aparelho: a pessoa lança a despesa (fica salva
   // no localStorage na hora), mas se o app fechar ou a internet cair antes do envio ao
   // Drive terminar, essa leitura acima pega um despesas.json antigo, sem ela — e ela
@@ -2222,16 +2265,6 @@ async function iniciarQR(target){
   qrTarget=target||'lancar';
   document.getElementById('qr-video-wrap').classList.add('open');
   try{
-    if(!zxingReader){
-      const hints=new Map();
-      // Formatos aceitos para NF-e brasileira (QR code padrão)
-      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[
-        ZXing.BarcodeFormat.QR_CODE
-      ]);
-      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-      zxingReader=new ZXing.BrowserMultiFormatReader(hints);
-    }
-
     // Stream com máxima qualidade e foco contínuo
     qrStream=await navigator.mediaDevices.getUserMedia({
       video:{
@@ -2288,6 +2321,18 @@ async function iniciarQR(target){
       return;
     }
 
+    // Sem leitor nativo (ex: iPhone): usa o zxing, baixado sob demanda.
+    if(!zxingReader){
+      await carregarLib('zxing');
+      const hints=new Map();
+      // Formatos aceitos para NF-e brasileira (QR code padrão)
+      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[
+        ZXing.BarcodeFormat.QR_CODE
+      ]);
+      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+      zxingReader=new ZXing.BrowserMultiFormatReader(hints);
+    }
+    if(!qrStream) return; // fechou a câmera enquanto o leitor baixava
     await zxingReader.decodeFromStream(
       qrStream,
       video,
@@ -2852,6 +2897,7 @@ async function gerarPDFUnificado(){
     // entra no app e vai direto para "Gerar" antes do carregamento em background terminar.
     await garantirComprovantesCarregados(desp, btn);
     btn.textContent='⏳ Gerando PDF...';
+    await Promise.all([carregarLib('pdf'), carregarLib('canvas')]);
 
     // 1. Gerar HTML da nota e converter para imagem com html2canvas
     const notaHTML = gerarHTMLNota(ev, desp);

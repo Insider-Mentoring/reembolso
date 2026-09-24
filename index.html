@@ -241,6 +241,8 @@ textarea{resize:vertical;min-height:68px}
 .tour-dots{display:flex;gap:5px;justify-content:center;flex-wrap:wrap;margin-bottom:12px}
 .tour-dot{width:7px;height:7px;border-radius:50%;background:var(--border2);transition:background .2s,width .2s;border:none;padding:0;cursor:pointer}
 .tour-dot.active{background:var(--primary);width:18px;border-radius:4px}
+.tour-dot.novo:not(.active){background:var(--amber);box-shadow:0 0 0 2px var(--amber-bg)}
+.tour-novo{display:inline-block;vertical-align:3px;margin-left:6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--primary-fg);background:var(--primary);padding:2px 7px;border-radius:6px}
 .tour-dot.visto{background:color-mix(in srgb,var(--primary) 45%,var(--border2))}
 @media (prefers-reduced-motion:reduce){
   .tour-highlight,.tour-box,.tour-progress > div{transition:none}
@@ -1437,7 +1439,8 @@ function mostrarApp(){
   }
   initApp();
   // Convite pro tour na primeira vez (a função já existia, mas nunca era chamada).
-  if(!localStorage.getItem('nd_tour_done')) setTimeout(mostrarBannerTutorial, 1200);
+  // Também reaparece pra quem viu uma versão anterior do tour (ver TOUR_VERSAO).
+  if(localStorage.getItem('nd_tour_done')!==TOUR_VERSAO) setTimeout(mostrarBannerTutorial, 1200);
 }
 
 function finalizarSetup(){
@@ -3835,7 +3838,10 @@ const TOUR_STEPS = [
   {
     title: '👋 Bem-vindo!',
     desc: 'Em 1 minuto você vê o caminho completo: do cadastro do evento até o reembolso cair na conta. O tour vai passando pelas abas da barra de baixo — sempre que mudar de aba, ela é destacada antes.',
-    dica: 'Use ← Voltar pra rever um passo, ou toque nas bolinhas abaixo pra pular direto.'
+    dica: 'Use ← Voltar pra rever um passo, ou toque nas bolinhas abaixo pra pular direto.',
+    // Pra quem já viu uma versão anterior (ver TOUR_VERSAO).
+    descNovidades: 'O app ganhou novidades! Os passos que mudaram estão marcados com NOVO — use as bolinhas abaixo pra ir direto neles, ou veja tudo de novo.',
+    dicaNovidades: 'Novidades: nota dividida pra conta em grupo, novo jeito de digitar o valor e um botão pra relatar problemas.'
   },
   {
     title: '📅 Crie o evento',
@@ -3857,12 +3863,15 @@ const TOUR_STEPS = [
   {
     title: '📆 Data e valor',
     desc: 'Informe a data do gasto e, logo abaixo, o valor. O app descobre sozinho se foi no Dia 1, Dia 2... do evento.',
+    dica: 'O valor entra pelos centavos, como na maquininha: digite 5, 0, 0, 0 pra R$ 50,00.',
+    novo: true,
     tab: 'lancar', alvo: ['#data']
   },
   {
     title: '🧾 Conta dividida no grupo',
     desc: 'Foram em grupo e o lugar deu uma nota só, com o valor cheio? Marque "Nota dividida", informe o total da nota e quantas pessoas — o app calcula a sua parte e coloca no valor.',
     dica: 'No PDF sai a observação "Nota de R$ 800,00 dividida entre 10 pessoas", pro financeiro entender por que o comprovante é maior que o valor pedido.',
+    novo: true,
     tab: 'lancar', alvo: ['#screen-lancar .div-toggle']
   },
   {
@@ -3911,6 +3920,7 @@ const TOUR_STEPS = [
     title: '💬 Fale com a gente',
     desc: 'Algo não funcionou ou teve uma ideia pra melhorar o app? Toque em "Relatar problema ou sugerir melhoria" e conte pra gente.',
     dica: 'Nos problemas, as informações técnicas do app vão junto — isso ajuda muito a resolver rápido. Também dá pra abrir pelo ? no topo.',
+    novo: true,
     tab: 'config', alvo: ['#cfg-suporte']
   },
   {
@@ -3933,6 +3943,13 @@ const TOUR_STEPS = [
   }
 ];
 
+// Versão do tour. Subir este número quando o app ganhar novidades que valem
+// um tour de novo: quem viu uma versão anterior recebe o convite outra vez (com
+// texto de novidades) e os passos marcados com `novo: true` ganham a etiqueta
+// NOVO. Antes o app guardava só "já viu" ('1'), então quem já tinha visto nunca
+// mais era avisado de nada.
+const TOUR_VERSAO = '2';
+let tourMostrarNovos = false;
 let tourStep = 0;
 let tourDirecao = 1;          // 1 = avançando, -1 = voltando (pra pular passo opcional no sentido certo)
 let tourVistos = new Set();
@@ -4028,6 +4045,7 @@ function inserirDespesasExemplo(){
 
 function mostrarBannerTutorial(){
   if(document.getElementById('banner-tutorial')) return;
+  const jaViu = !!localStorage.getItem('nd_tour_done');
   const banner = document.createElement('div');
   banner.id = 'banner-tutorial';
   // bottom acima da barra de abas (fixa no rodapé) — com 24px o banner ficava por cima dela.
@@ -4039,16 +4057,16 @@ function mostrarBannerTutorial(){
     font-family:-apple-system,sans-serif;font-size:14px;
     max-width:calc(100% - 32px);width:380px`;
   banner.innerHTML = `
-    <span style="font-size:24px">👋</span>
+    <span style="font-size:24px">${jaViu ? '🎉' : '👋'}</span>
     <div style="flex:1">
-      <div style="font-weight:600;margin-bottom:2px">Primeira vez aqui?</div>
-      <div style="font-size:12px;opacity:.85">Veja como usar o app em 1 minuto</div>
+      <div style="font-weight:600;margin-bottom:2px">${jaViu ? 'Novidades no app!' : 'Primeira vez aqui?'}</div>
+      <div style="font-size:12px;opacity:.85">${jaViu ? 'Nota dividida, valor mais fácil e mais' : 'Veja como usar o app em 1 minuto'}</div>
     </div>
     <button onclick="document.getElementById('banner-tutorial').remove();iniciarTour()"
       style="background:#fff;color:#000;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap">
-      Ver tour
+      ${jaViu ? 'Ver novidades' : 'Ver tour'}
     </button>
-    <button onclick="document.getElementById('banner-tutorial').remove();localStorage.setItem('nd_tour_done','1')"
+    <button onclick="document.getElementById('banner-tutorial').remove();localStorage.setItem('nd_tour_done',TOUR_VERSAO)"
       aria-label="Dispensar"
       style="background:none;border:none;color:var(--primary-fg);cursor:pointer;font-size:20px;opacity:.7;padding:0 4px">✕</button>`;
   document.body.appendChild(banner);
@@ -4060,6 +4078,8 @@ function iniciarTour(){
   tourStep = 0;
   tourDirecao = 1;
   tourVistos = new Set();
+  const versaoVista = localStorage.getItem('nd_tour_done');
+  tourMostrarNovos = !!versaoVista && versaoVista !== TOUR_VERSAO;
   const telaAtiva = document.querySelector('.screen.active');
   tourAbaAtual = telaAtiva ? telaAtiva.id.replace('screen-','') : null;
   document.getElementById('tour-overlay').classList.add('active');
@@ -4117,16 +4137,19 @@ function renderTourStep(){
     if(seq !== tourSeq) return;
     document.getElementById('tour-step-label').textContent = `Passo ${tourStep+1} de ${total}`;
     document.getElementById('tour-progress-bar').style.width = ((tourStep+1)/total*100)+'%';
-    document.getElementById('tour-title').textContent = step.title;
+    const tituloEl = document.getElementById('tour-title');
+    tituloEl.textContent = step.title;
+    if(tourMostrarNovos && step.novo) tituloEl.insertAdjacentHTML('beforeend', ' <span class="tour-novo">novo</span>');
     const instalado = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
     document.getElementById('tour-desc').textContent =
-      (instalado && step.descInstalado) || (alternativo && step.descAlt) || step.desc;
-    const dica = (instalado && 'dicaInstalado' in step) ? step.dicaInstalado : ((tourDemo && step.dicaDemo) || step.dica);
+      (tourMostrarNovos && step.descNovidades) || (instalado && step.descInstalado) || (alternativo && step.descAlt) || step.desc;
+    const dica = (tourMostrarNovos && step.dicaNovidades) ||
+      ((instalado && 'dicaInstalado' in step) ? step.dicaInstalado : ((tourDemo && step.dicaDemo) || step.dica));
     document.getElementById('tour-dica').textContent = dica ? '💡 ' + dica : '';
     marcarAbaTour(step, navBtn ? 'indo' : mudouAba ? 'mudou' : '');
 
     document.getElementById('tour-dots').innerHTML = TOUR_STEPS.map((s,i)=>
-      `<button class="tour-dot${i===tourStep?' active':tourVistos.has(i)?' visto':''}" onclick="irParaTour(${i})" aria-label="Ir para o passo ${i+1}: ${s.title.replace(/"/g,'')}"></button>`).join('');
+      `<button class="tour-dot${i===tourStep?' active':tourVistos.has(i)?' visto':''}${tourMostrarNovos&&s.novo?' novo':''}" onclick="irParaTour(${i})" aria-label="Ir para o passo ${i+1}: ${s.title.replace(/"/g,'')}"></button>`).join('');
 
     document.getElementById('tour-back-btn').style.visibility = tourStep === 0 ? 'hidden' : 'visible';
     document.getElementById('tour-next-btn').textContent =
@@ -4275,7 +4298,7 @@ function pularTour(){
   window.removeEventListener('resize', agendarPosicaoTour);
   document.removeEventListener('keydown', teclaTour);
   tourAlvo = null;
-  localStorage.setItem('nd_tour_done','1');
+  localStorage.setItem('nd_tour_done',TOUR_VERSAO);
   renderDespesas(); // tira as despesas de exemplo, se o tour colocou
   go('eventos'); // não deixa a pessoa largada na última aba que o tour abriu (e tira o evento de exemplo)
 }

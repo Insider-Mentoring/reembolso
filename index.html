@@ -1798,6 +1798,7 @@ function salvarEvento(){
   const cidade=document.getElementById('ev-cidade').value.trim();
   const inicio=document.getElementById('ev-inicio').value;
   const fim=document.getElementById('ev-fim').value;
+  const adiantamento=centavosDe('ev-adiant')/100;
   const editId=document.getElementById('ev-edit-id').value;
   const msg=document.getElementById('ev-msg');
   if(!nome){msg.style.color='var(--red)';msg.textContent='⚠️ Informe o nome.';return}
@@ -1805,10 +1806,10 @@ function salvarEvento(){
   if(!inicio){msg.style.color='var(--red)';msg.textContent='⚠️ Informe a data de início.';return}
   if(editId){
     const idx=S.eventos.findIndex(e=>e.id===editId);
-    if(idx>-1)S.eventos[idx]={...S.eventos[idx],nome,tomador,cidade,inicio,fim};
+    if(idx>-1)S.eventos[idx]={...S.eventos[idx],nome,tomador,cidade,inicio,fim,adiantamento};
   }else{
     const novoId='ev_'+Date.now();
-    S.eventos.push({id:novoId,nome,tomador,cidade,inicio,fim});
+    S.eventos.push({id:novoId,nome,tomador,cidade,inicio,fim,adiantamento});
     if(!S.eventoAtivo)S.eventoAtivo=novoId;
   }
   const novoEv=S.eventos[S.eventos.length-1];
@@ -1820,6 +1821,7 @@ function limparModalEvento(){
   ['ev-edit-id','ev-cidade','ev-inicio','ev-fim'].forEach(id=>document.getElementById(id).value='');
   const nomeEl=document.getElementById('ev-nome');
   if(nomeEl) nomeEl.value='';
+  definirValorCampo(document.getElementById('ev-adiant'),0);
   document.getElementById('ev-nome-select').value='';
   document.getElementById('ev-nome-outro-wrap').style.display='none';
   document.getElementById('ev-tomador').value='';
@@ -1847,6 +1849,7 @@ function editarEvento(id){
   document.getElementById('ev-cidade').value=ev.cidade||'';
   document.getElementById('ev-inicio').value=ev.inicio;
   document.getElementById('ev-fim').value=ev.fim||'';
+  definirValorCampo(document.getElementById('ev-adiant'),Math.round((ev.adiantamento||0)*100));
   document.getElementById('modal-evento-title').textContent='Editar evento';
   document.getElementById('ev-danger-zone').style.display='block';
   updateEvTomador();openModal('modal-evento');
@@ -2641,13 +2644,37 @@ function showAddMsg(txt,t){
 }
 
 // ─── DESPESAS ─────────────────────────────────────────────────
+// Saldo do adiantamento de alimentação do evento (só controle do usuário, não
+// vai pra nota). Conta apenas despesas de Alimentação; `valor` já é a parte da
+// pessoa quando a nota foi dividida.
+function adiantamentoHtml(ev,desp){
+  const adiant=ev&&ev.adiantamento>0?ev.adiantamento:0;
+  if(!adiant) return '';
+  const gasto=desp.filter(d=>d.tipo==='alimentacao').reduce((s,d)=>s+d.valor,0);
+  const resta=Math.round((adiant-gasto)*100)/100;
+  const estourou=resta<0;
+  const pct=Math.min(100,gasto/adiant*100);
+  const cor=estourou?'var(--red)':'var(--green)';
+  return `<div class="summary" style="margin-top:10px">
+      <div class="summary-top">
+        <span class="summary-label">${estourou?'Acima do adiantamento':'Resta do adiantamento'}</span>
+        <span class="summary-total" style="color:${cor}">${fv(Math.abs(resta))}</span>
+      </div>
+      <div class="summary-bar"><span style="width:${pct}%;background:${cor}"></span></div>
+      <div class="summary-legend">
+        <span>Adiantamento · ${fv(adiant)}</span>
+        <span>Alimentação gasta · ${fv(gasto)}</span>
+      </div>
+    </div>`;
+}
+
 function renderDespesas(){
   const el=document.getElementById('despesas-list');
   const ta=document.getElementById('total-area');
   const desp=S.eventoAtivo?S.despesas.filter(d=>d.eventoId===S.eventoAtivo):S.despesas;
   const ev=S.eventoAtivo?S.eventos.find(e=>e.id===S.eventoAtivo):null;
   if(!desp.length){
-    ta.innerHTML=ev?`<span class="event-chip" style="margin-bottom:10px"><b>${ev.nome}</b>${ev.cidade?' · '+ev.cidade:''}</span>`:'';
+    ta.innerHTML=(ev?`<span class="event-chip" style="margin-bottom:10px"><b>${ev.nome}</b>${ev.cidade?' · '+ev.cidade:''}</span>`:'')+adiantamentoHtml(ev,desp);
     el.innerHTML='<div class="empty"><span class="ei">🧾</span>Nenhuma despesa lançada ainda</div>';
     return;
   }
@@ -2671,7 +2698,8 @@ function renderDespesas(){
         <span><i class="dot" style="background:var(--blue)"></i>Transporte · ${fv(totalTransp)}</span>
         <span><i class="dot" style="background:var(--green)"></i>Alimentação · ${fv(totalAlim)}</span>
       </div>
-    </div>`;
+    </div>
+    ${adiantamentoHtml(ev,desp)}`;
   el.innerHTML=desp.map((d,idx)=>`
     <div class="exp-item${d.tipo!=='transporte'?' tipo-alimentacao':''}" data-id="${d.id}">
       <div class="exp-stripe"></div>
@@ -3887,12 +3915,13 @@ const TOUR_STEPS = [
     dica: 'Use ← Voltar pra rever um passo, ou toque nas bolinhas abaixo pra pular direto.',
     // Pra quem já viu uma versão anterior (ver TOUR_VERSAO).
     descNovidades: 'O app ganhou novidades! Os passos que mudaram estão marcados com NOVO — use as bolinhas abaixo pra ir direto neles, ou veja tudo de novo.',
-    dicaNovidades: 'Novidades: nota dividida pra conta em grupo, novo jeito de digitar o valor e um botão pra relatar problemas.'
+    dicaNovidades: 'Novidades: adiantamento de alimentação com saldo no evento, nota dividida pra conta em grupo, novo jeito de digitar o valor e um botão pra relatar problemas.'
   },
   {
     title: '📅 Crie o evento',
     desc: 'Tudo começa pelo evento. Toque em "Novo" e informe nome, cidade, a empresa que vai reembolsar e as datas.',
-    dica: 'Use as datas de deslocamento: do dia da ida até o dia da volta — não só os dias do evento.',
+    dica: 'Use as datas de deslocamento: do dia da ida até o dia da volta — não só os dias do evento. Recebeu adiantamento da empresa? Informe o valor no evento e o app mostra quanto ainda resta da alimentação.',
+    novo: true,
     tab: 'eventos', alvo: ['#screen-eventos .btn-primary']
   },
   {
@@ -3994,7 +4023,7 @@ const TOUR_STEPS = [
 // texto de novidades) e os passos marcados com `novo: true` ganham a etiqueta
 // NOVO. Antes o app guardava só "já viu" ('1'), então quem já tinha visto nunca
 // mais era avisado de nada.
-const TOUR_VERSAO = '2';
+const TOUR_VERSAO = '3';
 let tourMostrarNovos = false;
 let tourStep = 0;
 let tourDirecao = 1;          // 1 = avançando, -1 = voltando (pra pular passo opcional no sentido certo)
@@ -4671,6 +4700,10 @@ initGoogle();
       Ex: evento de 3 dias + 1 dia de ida + 1 de volta = <b>5 dias no total</b><br>
       O Dia 1 na nota será sempre o 1º dia de deslocamento.
     </div>
+    <label>Adiantamento de alimentação (opcional)</label>
+    <input type="text" id="ev-adiant" placeholder="R$ 0,00" inputmode="numeric"
+      oninput="mascaraValor(this,event)" onfocus="setTimeout(()=>cursorNoFimValor(this))" onclick="cursorNoFimValor(this)" />
+    <div style="font-size:12px;color:var(--text2);margin-top:4px">Valor que a empresa adiantou por Pix. É só pro seu controle: o app mostra quanto ainda resta. Não aparece na nota.</div>
     <div id="ev-msg" style="font-size:13px;margin:10px 0;min-height:16px"></div>
     <button class="btn btn-primary" onclick="salvarEvento()">💾 Salvar evento</button>
     <div id="ev-danger-zone" style="display:none;margin-top:20px;padding-top:16px;border-top:.5px solid var(--border)">

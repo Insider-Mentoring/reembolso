@@ -2958,7 +2958,26 @@ async function gerarPDFUnificado(){
     notaPage.drawImage(notaImg, {x:0, y:0, width, height});
 
     // 3. Adicionar comprovantes
+    // Cada página anexa ganha uma faixa de cabeçalho no topo com o nº do item da
+    // nota, o valor informado e a descrição, pra identificar de qual despesa é.
+    const fonte = await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
+    const fonteBold = await pdfDoc.embedFont(PDFLib.StandardFonts.HelveticaBold);
+    const CAB_H = 44;
+    const desenharCabecalho = (page, d, item, a) => {
+      const pw = page.getWidth(), ph = page.getHeight();
+      page.drawRectangle({x:0, y:ph-CAB_H, width:pw, height:CAB_H, color:rgb(0.94,0.94,0.94)});
+      page.drawLine({start:{x:0,y:ph-CAB_H}, end:{x:pw,y:ph-CAB_H}, thickness:0.8, color:rgb(0.6,0.6,0.6)});
+      page.drawText(`Item ${item} da nota  —  Valor: ${fv(d.valor)}`, {
+        x:20, y:ph-17, size:11, font:fonteBold, color:rgb(0.1,0.1,0.1)
+      });
+      page.drawText(`${d.desc.split('\n')[0]} — ${a.name}${textoDivisao(d)?' — '+textoDivisao(d):''}`, {
+        x:20, y:ph-30, size:8, font:fonte, color:rgb(0.3,0.3,0.3),
+        maxWidth: pw-40, lineHeight:9
+      });
+    };
+
     for(const d of desp){
+      const item = desp.indexOf(d)+1;
       for(const a of (d.attachs||[])){
         if(!a.data) continue;
         try{
@@ -2970,24 +2989,29 @@ async function gerarPDFUnificado(){
             const page = pdfDoc.addPage([595, 842]);
             const pw = page.getWidth(), ph = page.getHeight();
             const iw = imgEmbed.width, ih = imgEmbed.height;
-            const scale = Math.min((pw-40)/iw, (ph-60)/ih);
+            const areaH = ph-CAB_H;
+            const scale = Math.min((pw-40)/iw, (areaH-40)/ih);
             const dw = iw*scale, dh = ih*scale;
-            const x = (pw-dw)/2, y = (ph-dh)/2;
-            // Label do comprovante
-            page.drawText(`${d.desc.split('\n')[0]} — ${a.name}${textoDivisao(d)?' — '+textoDivisao(d):''}`, {
-              x:20, y:ph-20, size:8, color:rgb(0.4,0.4,0.4),
-              maxWidth: pw-40
-            });
+            const x = (pw-dw)/2, y = (areaH-dh)/2;
+            desenharCabecalho(page, d, item, a);
             page.drawImage(imgEmbed, {x, y, width:dw, height:dh});
 
           } else if(a.type && a.type.includes('pdf')){
-            // PDF → copiar páginas
+            // PDF → cada página original é encaixada numa página A4 com a faixa
+            // de cabeçalho no topo (reduzida de leve pra não cobrir o conteúdo).
             const base64 = a.data.split(',')[1].replace(/\s/g,'');
             const pdfBytes = Uint8Array.from(atob(base64), c=>c.charCodeAt(0));
             const srcPdf = await PDFDocument.load(pdfBytes, {ignoreEncryption:true});
-            const pageCount = srcPdf.getPageCount();
-            const copiedPages = await pdfDoc.copyPages(srcPdf, [...Array(pageCount).keys()]);
-            copiedPages.forEach(p=>pdfDoc.addPage(p));
+            const embedded = await pdfDoc.embedPdf(srcPdf, [...Array(srcPdf.getPageCount()).keys()]);
+            for(const ep of embedded){
+              const page = pdfDoc.addPage([595, 842]);
+              const pw = page.getWidth(), ph = page.getHeight();
+              const areaH = ph-CAB_H;
+              const scale = Math.min(pw/ep.width, areaH/ep.height);
+              const dw = ep.width*scale, dh = ep.height*scale;
+              page.drawPage(ep, {x:(pw-dw)/2, y:(areaH-dh)/2, width:dw, height:dh});
+              desenharCabecalho(page, d, item, a);
+            }
           }
         }catch(e){ console.warn('Erro ao adicionar comprovante:', a.name, e); }
       }

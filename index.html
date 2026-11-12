@@ -376,15 +376,13 @@ textarea{resize:vertical;min-height:68px}
     <div id="evento-ativo-info"></div>
 
     <div class="slabel">Tipo</div>
-    <div class="tipo-grid" style="grid-template-columns:1fr 1fr 1fr">
+    <div class="tipo-grid">
       <button class="tipo-btn sel" id="btn-transp" onclick="setTipo('transporte')"><svg class="icon" style="width:16px;height:16px"><use href="#i-car"/></svg> Transporte</button>
       <button class="tipo-btn" id="btn-alim" onclick="setTipo('alimentacao')"><svg class="icon" style="width:16px;height:16px"><use href="#i-fork"/></svg> Alimentação</button>
-      <button class="tipo-btn" id="btn-outro" onclick="setTipo('outro')"><svg class="icon" style="width:16px;height:16px"><use href="#i-plus"/></svg> Outro</button>
     </div>
-
-    <div id="outro-wrap" style="display:none;margin-top:8px">
-      <label>Qual tipo de despesa?</label>
-      <input type="text" id="outro-tipo" placeholder="Ex: Farmácia, Estacionamento..." oninput="atualizarDesc()" />
+    <button type="button" id="btn-personalizar" onclick="togglePersonalizar()" style="background:none;border:none;color:var(--text2);font:inherit;font-size:13px;padding:6px 2px;cursor:pointer">✏️ Personalizar descrição</button>
+    <div id="outro-wrap" style="display:none;margin-top:2px">
+      <input type="text" id="outro-tipo" placeholder="Ex: Farmácia, Estacionamento... (continua contando na categoria)" oninput="atualizarDesc()" />
     </div>
 
     <div class="card" style="margin-top:8px;margin-bottom:4px">
@@ -421,8 +419,6 @@ textarea{resize:vertical;min-height:68px}
     </div>
 
     <div class="slabel" style="margin:16px 0 8px">Nota fiscal / comprovante</div>
-    <div class="alert a-warn" style="margin-bottom:8px">⚠️ Guarde o cupom fiscal em papel até o reembolso cair na conta. A foto é um apoio — só jogue o original fora depois de receber.</div>
-
     <div id="comprovante-btns" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
       <div class="drop" onclick="document.getElementById('file-camera').click()" style="margin-top:0">
         <div class="di"><svg class="icon"><use href="#i-camera"/></svg></div>
@@ -1991,10 +1987,18 @@ function setTipo(t){
   tipo=t;
   document.getElementById('btn-transp').className='tipo-btn'+(t==='transporte'?' sel':'');
   document.getElementById('btn-alim').className='tipo-btn'+(t==='alimentacao'?' sel':'');
-  document.getElementById('btn-outro').className='tipo-btn'+(t==='outro'?' sel':'');
-  document.getElementById('outro-wrap').style.display=t==='outro'?'block':'none';
-  if(t!=='outro') document.getElementById('outro-tipo').value='';
   atualizarDesc();
+}
+
+// Descrição personalizada (ex: "Estacionamento") — só troca o texto; a despesa
+// continua na categoria escolhida (Transporte/Alimentação) e entra nos totais.
+function togglePersonalizar(mostrar){
+  const w=document.getElementById('outro-wrap');
+  const abrir=mostrar===undefined?w.style.display==='none':mostrar;
+  w.style.display=abrir?'block':'none';
+  document.getElementById('btn-personalizar').style.display=abrir?'none':'';
+  if(abrir) document.getElementById('outro-tipo').focus();
+  else {document.getElementById('outro-tipo').value='';atualizarDesc();}
 }
 
 function setDia(d){
@@ -2230,10 +2234,9 @@ function getNomeEvento(){
 }
 
 function getTipoLabel(){
-  if(tipo==='transporte')return'Transporte';
-  if(tipo==='alimentacao')return'Alimentação';
   const v=(document.getElementById('outro-tipo')||{}).value||'';
-  return v.trim()||'Outro';
+  const padrao=tipo==='alimentacao'?'Alimentação':'Transporte';
+  return v.trim()||padrao;
 }
 
 function atualizarDesc(){
@@ -2562,11 +2565,6 @@ async function salvarComprovanteNoDispositivo(){
 async function addDespesa(){
   if(comprovantePendente>0){showAddMsg('⏳ Aguarde o comprovante terminar de processar e tente de novo.','err');return}
   if(!S.eventoAtivo){showAddMsg('⚠️ Selecione um evento primeiro.','err');return}
-  // Validar "outro"
-  if(tipo==='outro'){
-    const outroval=document.getElementById('outro-tipo').value.trim();
-    if(!outroval){showAddMsg('⚠️ Descreva o tipo de despesa.','err');return}
-  }
   const data=document.getElementById('data').value;
   const valor=getValorNumerico();
   if(!data){showAddMsg('⚠️ Informe a data.','err');return}
@@ -2595,7 +2593,7 @@ async function addDespesa(){
   definirValorCampo(document.getElementById('valor'),0);
   preencherDivisao('',null);
   document.getElementById('data').value=dataAtual;
-  if(tipo==='outro') document.getElementById('outro-tipo').value='';
+  togglePersonalizar(false);
   clearNF();attachs=[];renderAttachs();
   atualizarDesc();
 
@@ -2616,6 +2614,7 @@ async function addDespesa(){
   }
   if(sucesso){
     showAddMsg('✅ Despesa adicionada!','ok');
+    openModal('modal-aviso-cupom');
   }else{
     // Sem internet (ou Drive fora do ar) no momento — já está salva no aparelho
     // e o app tenta de novo sozinho a cada 15s; se a pessoa fechar mesmo assim,
@@ -2623,6 +2622,7 @@ async function addDespesa(){
     // (ver mesclarDespesasNaoSincronizadas()). O spinner continua girando pra
     // deixar claro que ainda está tentando, não que travou.
     showAddMsg('Salva no aparelho — sincronizando com o Drive...','wait');
+    openModal('modal-aviso-cupom');
   }
 }
 
@@ -2668,10 +2668,15 @@ function adiantamentoHtml(ev,desp){
     </div>`;
 }
 
+// Sempre em ordem cronológica (mais antiga primeiro); empate pela ordem de lançamento.
+function ordenarPorData(arr){
+  return arr.slice().sort((a,b)=>(a.data||'').localeCompare(b.data||'')||(a.id>b.id?1:a.id<b.id?-1:0));
+}
+
 function renderDespesas(){
   const el=document.getElementById('despesas-list');
   const ta=document.getElementById('total-area');
-  const desp=S.eventoAtivo?S.despesas.filter(d=>d.eventoId===S.eventoAtivo):S.despesas;
+  const desp=ordenarPorData(S.eventoAtivo?S.despesas.filter(d=>d.eventoId===S.eventoAtivo):S.despesas);
   const ev=S.eventoAtivo?S.eventos.find(e=>e.id===S.eventoAtivo):null;
   if(!desp.length){
     ta.innerHTML=(ev?`<span class="event-chip" style="margin-bottom:10px"><b>${ev.nome}</b>${ev.cidade?' · '+ev.cidade:''}</span>`:'')+adiantamentoHtml(ev,desp);
@@ -2728,10 +2733,6 @@ function renderDespesas(){
           <div class="spacer"></div>
           <button onclick="editarDespesa(${d.id})" title="Editar" aria-label="Editar"><svg class="icon"><use href="#i-pencil"/></svg></button>
           <button class="danger" onclick="delDespesa(${d.id})" title="Excluir" aria-label="Excluir"><svg class="icon"><use href="#i-trash"/></svg></button>
-          <div class="stepper">
-            <button onclick="moverDespesa(${d.id},-1)" ${idx===0?'disabled':''} title="Mover para cima" aria-label="Mover para cima"><svg class="icon"><use href="#i-chevron"/></svg></button>
-            <button onclick="moverDespesa(${d.id},1)" ${idx===desp.length-1?'disabled':''} title="Mover para baixo" aria-label="Mover para baixo"><svg class="icon" style="transform:rotate(180deg)"><use href="#i-chevron"/></svg></button>
-          </div>
         </div>
       </div>
     </div>`).join('');
@@ -2913,7 +2914,7 @@ async function gerarPDFUnificado(){
   if(!gerarEventoId){alert('Selecione um evento.');return}
   const ev=S.eventos.find(e=>e.id===gerarEventoId);
   if(!ev){alert('Evento não encontrado.');return}
-  const desp=S.despesas.filter(d=>d.eventoId===gerarEventoId);
+  const desp=ordenarPorData(S.despesas.filter(d=>d.eventoId===gerarEventoId));
   if(!desp.length){alert('Nenhuma despesa neste evento.');return}
 
   const btn=document.getElementById('btn-gerar-pdf');
@@ -3205,7 +3206,7 @@ function gerarPDF(){
   if(!gerarEventoId){alert('Selecione um evento.');return}
   const ev=S.eventos.find(e=>e.id===gerarEventoId);
   if(!ev){alert('Evento não encontrado.');return}
-  const desp=S.despesas.filter(d=>d.eventoId===gerarEventoId);
+  const desp=ordenarPorData(S.despesas.filter(d=>d.eventoId===gerarEventoId));
   if(!desp.length){alert('Nenhuma despesa neste evento.');return}
 
   const num=(document.getElementById('num-nota').value||padNum(S.notaCounter)).padStart(4,'0');
@@ -3709,11 +3710,9 @@ function editarDespesa(id){
   editTipo=d.tipo||'transporte';
   setEditTipo(editTipo, true);
 
-  // Se outro, preenche o tipo
-  if(editTipo==='outro'){
-    const label=d.desc.split('\n')[0].replace('Reembolso ','');
-    document.getElementById('edit-outro-tipo').value=label;
-  }
+  // Descrição personalizada: preenche se o texto difere do padrão da categoria
+  const labelAtual=d.desc.split('\n')[0].replace('Reembolso ','');
+  document.getElementById('edit-outro-tipo').value=(labelAtual==='Transporte'||labelAtual==='Alimentação')?'':labelAtual;
 
   // Dia — calculado pela data quando há evento ativo (igual na tela de
   // lançar); campo escondido, sem botões visíveis (não eram usados).
@@ -3758,15 +3757,12 @@ function setEditTipo(t, skipDesc){
   editTipo=t;
   document.getElementById('edit-btn-transp').className='tipo-btn'+(t==='transporte'?' sel':'');
   document.getElementById('edit-btn-alim').className='tipo-btn'+(t==='alimentacao'?' sel':'');
-  document.getElementById('edit-btn-outro').className='tipo-btn'+(t==='outro'?' sel':'');
-  document.getElementById('edit-outro-wrap').style.display=t==='outro'?'block':'none';
   if(!skipDesc) atualizarEditDesc();
 }
 
 function getEditTipoLabel(){
-  if(editTipo==='transporte')return'Transporte';
-  if(editTipo==='alimentacao')return'Alimentação';
-  return(document.getElementById('edit-outro-tipo').value||'').trim()||'Outro';
+  const v=(document.getElementById('edit-outro-tipo').value||'').trim();
+  return v||(editTipo==='alimentacao'?'Alimentação':'Transporte');
 }
 
 // Recalcula o dia do evento quando a data muda dentro do modal de editar —
@@ -3855,8 +3851,8 @@ function salvarEdicao(){
   const idx=S.despesas.findIndex(x=>x.id===id);
   if(idx===-1)return;
 
-  if(editTipo==='outro'&&!document.getElementById('edit-outro-tipo').value.trim()){
-    alert('Descreva o tipo de despesa.');return;
+  if(editTipo!=='transporte'&&editTipo!=='alimentacao'){
+    alert('Escolha Transporte ou Alimentação.');return;
   }
   const data=document.getElementById('edit-data').value;
   if(!data){alert('Informe a data.');return}
@@ -3956,7 +3952,7 @@ const TOUR_STEPS = [
   },
   {
     title: '🧾 Tipo de despesa',
-    desc: 'Na aba Lançar, escolha Transporte, Alimentação ou Outro. A descrição da despesa é montada sozinha.',
+    desc: 'Na aba Lançar, escolha Transporte ou Alimentação. A descrição é montada sozinha — se quiser, toque em Personalizar descrição (a despesa continua na mesma categoria).',
     tab: 'lancar', alvo: ['.tipo-grid']
   },
   {
@@ -3987,7 +3983,7 @@ const TOUR_STEPS = [
   },
   {
     title: '📋 Confira as despesas',
-    desc: 'Aqui fica tudo que você lançou no evento, com o total por categoria. Reordene com ▲▼ e toque no ✏️ pra editar.',
+    desc: 'Aqui fica tudo que você lançou no evento, com o total por categoria. Elas ficam em ordem de data. Toque no ✏️ pra editar.',
     dicaDemo: 'Essas despesas são só exemplos — as suas aparecem aqui conforme você lança.',
     tab: 'despesas', alvo: ['#despesas-list .exp-item', '#tab-despesas']
   },
@@ -4411,7 +4407,7 @@ function enviarEmail(){
   if(!gerarEventoId){alert('Selecione um evento.');return}
   const ev=S.eventos.find(e=>e.id===gerarEventoId);
   if(!ev){alert('Evento não encontrado.');return}
-  const desp=S.despesas.filter(d=>d.eventoId===gerarEventoId);
+  const desp=ordenarPorData(S.despesas.filter(d=>d.eventoId===gerarEventoId));
   if(!desp.length){alert('Nenhuma despesa neste evento.');return}
 
   const p=S.prestador||{};
@@ -4813,6 +4809,15 @@ initGoogle();
   </div>
 </div>
 
+<!-- MODAL AVISO CUPOM (aparece ao salvar uma despesa) -->
+<div class="modal-overlay" id="modal-aviso-cupom">
+  <div class="modal" style="text-align:center">
+    <h2>✅ Despesa salva</h2>
+    <div class="alert a-warn" style="text-align:left">⚠️ Guarde o cupom fiscal em papel até o reembolso cair na conta. A foto é um apoio — só jogue o original fora depois de receber.</div>
+    <button class="btn btn-primary mt16" onclick="closeModal('modal-aviso-cupom')">Entendi</button>
+  </div>
+</div>
+
 <!-- MODAL EDITAR DESPESA -->
 <div class="modal-overlay" id="modal-editar">
   <div class="modal">
@@ -4821,15 +4826,12 @@ initGoogle();
     <input type="hidden" id="edit-id" />
 
     <div class="slabel" style="margin-top:0">Tipo</div>
-    <div class="tipo-grid" style="grid-template-columns:1fr 1fr 1fr">
+    <div class="tipo-grid">
       <button class="tipo-btn" id="edit-btn-transp" onclick="setEditTipo('transporte')"><svg class="icon" style="width:16px;height:16px"><use href="#i-car"/></svg> Transporte</button>
       <button class="tipo-btn" id="edit-btn-alim" onclick="setEditTipo('alimentacao')"><svg class="icon" style="width:16px;height:16px"><use href="#i-fork"/></svg> Alimentação</button>
-      <button class="tipo-btn" id="edit-btn-outro" onclick="setEditTipo('outro')"><svg class="icon" style="width:16px;height:16px"><use href="#i-plus"/></svg> Outro</button>
     </div>
-    <div id="edit-outro-wrap" style="display:none;margin-top:8px">
-      <label>Qual tipo?</label>
-      <input type="text" id="edit-outro-tipo" placeholder="Ex: Farmácia..." oninput="atualizarEditDesc()" />
-    </div>
+    <label style="margin-top:10px">Descrição personalizada (opcional)</label>
+    <input type="text" id="edit-outro-tipo" placeholder="Ex: Farmácia, Estacionamento..." oninput="atualizarEditDesc()" />
 
     <!-- Dia calculado automaticamente pela data, igual na tela de lançar --
          sem botões visíveis, só o campo escondido que guarda o valor. -->
@@ -4932,7 +4934,7 @@ initGoogle();
       </div>
       <div style="margin-bottom:16px">
         <div style="font-weight:600;margin-bottom:4px">➕ Lançar</div>
-        <div style="color:var(--text2);font-size:13px">Selecione o tipo (Transporte, Alimentação ou Outro), escolha a data e informe o valor. O <b>Dia X</b> é calculado automaticamente pela data. Anexe o comprovante (foto ou PDF).</div>
+        <div style="color:var(--text2);font-size:13px">Selecione o tipo (Transporte ou Alimentação), escolha a data e informe o valor. O <b>Dia X</b> é calculado automaticamente pela data. Anexe o comprovante (foto ou PDF).</div>
       </div>
       <div style="margin-bottom:16px">
         <div style="font-weight:600;margin-bottom:4px">📋 Despesas</div>

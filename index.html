@@ -389,17 +389,17 @@ textarea{resize:vertical;min-height:68px}
       <div id="desc-preview" style="font-size:13px;color:var(--text2);line-height:1.5;margin-top:2px"></div>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
-    <div style="position:relative">
-      <svg class="icon" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--text2);pointer-events:none"><use href="#i-cal"/></svg>
-      <input type="date" id="data" onchange="calcularDiaAuto()" style="text-align:center;padding-left:32px;padding-right:8px;height:100%" />
-    </div>
-    <input type="text" id="valor" placeholder="R$ 0,00" inputmode="numeric"
-      oninput="mascaraValor(this,event)" onfocus="setTimeout(()=>cursorNoFimValor(this))" onclick="cursorNoFimValor(this)" style="margin:0;font-size:22px;font-weight:700;text-align:center;padding:10px;min-width:0;font-family:ui-monospace,'SF Mono','Cascadia Mono','Roboto Mono',Consolas,monospace;font-variant-numeric:tabular-nums" />
+    <div style="position:relative;margin-top:12px">
+      <svg class="icon" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);width:18px;height:18px;color:var(--text2);pointer-events:none"><use href="#i-cal"/></svg>
+      <input type="date" id="data" onchange="calcularDiaAuto()" style="text-align:center;padding-left:40px;padding-right:40px" />
     </div>
     <div id="dia-calculado" style="background:var(--bg2);border-radius:var(--radius-sm);padding:8px 12px;font-size:13px;margin-top:4px;display:none">
       📅 <span id="dia-calculado-texto"></span>
     </div>
+
+    <input type="text" id="valor" placeholder="R$ 0,00" inputmode="numeric"
+      oninput="mascaraValor(this,event)" onfocus="setTimeout(()=>cursorNoFimValor(this))" onclick="cursorNoFimValor(this)" style="margin-top:12px;font-size:28px;font-weight:700;text-align:center;padding:14px;font-family:ui-monospace,'SF Mono','Cascadia Mono','Roboto Mono',Consolas,monospace;font-variant-numeric:tabular-nums" />
+
 
     <label class="div-toggle">
       <input type="checkbox" id="div-check" onchange="alternarDivisao('')" />

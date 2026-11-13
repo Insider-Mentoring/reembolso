@@ -650,6 +650,16 @@ let lastDespesaId=0;
 // Garante id único mesmo se duas despesas forem lançadas no mesmo milissegundo
 // (Date.now() sozinho já causou colisão, o que fazia editar/excluir uma despesa
 // acabar afetando outra que compartilhava o mesmo id).
+// Exclusões ainda não confirmadas no Drive. Se o app fecha (ou a internet cai)
+// antes do Drive receber a exclusão, o despesas.json antigo ainda tem a despesa e
+// ela voltava ao reabrir. Guardamos os ids apagados até um salvamento completo
+// dar certo e, ao carregar, descartamos o que estiver nessa lista.
+function lerExclusoesPendentes(){
+  try{ const a=JSON.parse(localStorage.getItem('nd_del_pend')||'[]'); return Array.isArray(a)?a:[]; }catch(e){ return []; }
+}
+function gravarExclusoesPendentes(ids){
+  try{ localStorage.setItem('nd_del_pend', JSON.stringify(ids)); }catch(e){}
+}
 function novoDespesaId(){
   let id=Date.now();
   if(id<=lastDespesaId) id=lastDespesaId+1;
@@ -1035,8 +1045,11 @@ async function carregarDespesasEvento(ev){
     const fid = await getEventoFolderId(ev.id);
     if(!fid) return [];
     const q = `name='despesas.json' and trashed=false and '${fid}' in parents`;
+    // orderBy=createdTime: mesmo critério de buscarOuCriarArquivo() na gravação.
+    // Sem isso, com um despesas.json duplicado na pasta, o app gravava num arquivo
+    // e lia o outro (desatualizado) — e despesas já excluídas "voltavam".
     const r = await driveReq('GET',
-      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`);
+      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&orderBy=createdTime&fields=files(id)`);
     if(r.files && r.files.length > 0){
       const desp = await lerArquivo(r.files[0].id);
       if(Array.isArray(desp)) return desp;
@@ -1070,9 +1083,18 @@ async function carregarTodasDespesas(){
   // apagadas de verdade em outro aparelho. Em vez disso, usa o que acabou de vir do
   // Drive agora como marco inicial e só passa a recuperar despesas perdidas a partir
   // do próximo salvamento bem-sucedido.
+  // Antes de tudo, descarta o que a pessoa apagou aqui e o Drive ainda não soube.
+  let limpouExcluidas=false;
+  const excluidas=new Set(lerExclusoesPendentes());
+  if(excluidas.size){
+    const antes=S.despesas.length;
+    S.despesas=S.despesas.filter(d=>!excluidas.has(d.id));
+    limpouExcluidas=S.despesas.length!==antes;
+  }
   if(localStorage.getItem('nd_main_synced')===null){
     try{ localStorage.setItem('nd_main_synced', JSON.stringify(S)); }catch(e){}
-  } else if(mesclarDespesasNaoSincronizadas()){
+    if(limpouExcluidas) salvar();
+  } else if(mesclarDespesasNaoSincronizadas() || limpouExcluidas){
     salvar();
   }
   atualizarUltimoDespesaId();
@@ -1093,7 +1115,7 @@ function mesclarDespesasNaoSincronizadas(){
   const idsJaSincronizados = new Set((lsSync&&Array.isArray(lsSync.despesas))?lsSync.despesas.map(d=>d.id):[]);
   let recuperou=false;
   for(const d of ls.despesas){
-    if(!idsAtuais.has(d.id) && !idsJaSincronizados.has(d.id)){
+    if(!idsAtuais.has(d.id) && !idsJaSincronizados.has(d.id) && !lerExclusoesPendentes().includes(d.id)){
       S.despesas.push(d);
       recuperou=true;
     }
@@ -1297,6 +1319,7 @@ async function salvarUmaVez(){
   if(!accessToken || !rootFolderId){ atualizarStorageInfo(); return false; }
 
   setSyncStatus('💾 salvando...');
+  const exclusoesDestaRodada=lerExclusoesPendentes();
   let algumErro=false;
   let sucesso=false;
   try{
@@ -1350,6 +1373,11 @@ async function salvarUmaVez(){
       // Marca este estado como confirmado no Drive — usado por mesclarDespesasNaoSincronizadas()
       // pra distinguir "despesa apagada de verdade" de "despesa que nunca chegou a sincronizar".
       try{ localStorage.setItem('nd_main_synced', JSON.stringify(S)); }catch(e){}
+      // Drive já recebeu essas exclusões — não precisa mais lembrar delas.
+      if(exclusoesDestaRodada.length){
+        const idsVivos=new Set(S.despesas.map(d=>d.id));
+        gravarExclusoesPendentes(lerExclusoesPendentes().filter(i=>!exclusoesDestaRodada.includes(i)||idsVivos.has(i)));
+      }
       sucesso=true;
     }
   }catch(e){
@@ -2786,6 +2814,7 @@ function moverDespesa(id, dir){
 function delDespesa(id){
   if(!confirm('Remover esta despesa?'))return;
   S.despesas=S.despesas.filter(d=>d.id!==id);
+  gravarExclusoesPendentes([...new Set([...lerExclusoesPendentes(),id])]);
   salvar();renderDespesas();
   mostrarToast('🗑️ Despesa removida','ok');
 }

@@ -1369,7 +1369,10 @@ async function salvarUmaVez(){
       agendarNovaTentativaSalvar();
     } else {
       const agora = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-      setSyncStatus('✓ salvo às '+agora);
+      // Se já tem outra gravação na fila (salvar() chamado enquanto esta rodava),
+      // não mostra "salvo" agora — senão aparecia "salvo", voltava "salvando..."
+      // e aparecia "salvo" de novo. O "salvo" final vem da última da fila.
+      if(!salvarPendente) setSyncStatus('✓ salvo às '+agora);
       // Marca este estado como confirmado no Drive — usado por mesclarDespesasNaoSincronizadas()
       // pra distinguir "despesa apagada de verdade" de "despesa que nunca chegou a sincronizar".
       try{ localStorage.setItem('nd_main_synced', JSON.stringify(S)); }catch(e){}

@@ -52,7 +52,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 /* Barra de abas fica no rodapé (padrão dos apps mobile) em vez de colada no
    cabeçalho — duas barras fixas grudadas no topo pesavam visualmente e
    competiam por atenção logo de cara. */
-.nav{display:flex;border-top:.5px solid var(--border);background:var(--bg);position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:100%;max-width:480px;z-index:20;padding-bottom:env(safe-area-inset-bottom,0)}
+.nav{display:flex;border-top:.5px solid var(--border);background:var(--bg2);position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:100%;max-width:480px;z-index:20;padding-bottom:env(safe-area-inset-bottom,0)}
 .nav button{flex:1;padding:9px 2px 7px;font-size:10px;background:none;border:none;color:var(--text3);cursor:pointer;font-family:inherit;transition:color .15s}
 .nav button.active{color:var(--primary);font-weight:600}
 .nav button .ni{font-size:19px;display:block;margin:0 auto 2px}
@@ -66,11 +66,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 /* Nota dividida (conta em grupo com uma nota só) */
 .div-toggle{display:flex;align-items:center;gap:8px;margin:10px 0 0;font-size:13.5px;color:var(--text);cursor:pointer;user-select:none}
 .div-toggle input{width:18px;height:18px;margin:0;accent-color:var(--primary);flex-shrink:0}
-.div-box{background:var(--bg2);border-radius:var(--radius-sm);padding:12px;margin-top:8px}
-.div-pessoas{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--bg);border:.5px solid var(--border2);border-radius:var(--radius-sm);padding:6px}
-.div-pessoas button{width:38px;height:38px;border-radius:50%;border:.5px solid var(--border2);background:var(--bg2);color:var(--text);font-size:20px;line-height:1;cursor:pointer;font-family:inherit}
+.div-box{background:var(--bg3);border-radius:var(--radius-sm);padding:12px;margin-top:8px}
+.div-pessoas{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--bg2);border:.5px solid var(--border2);border-radius:var(--radius-sm);padding:6px}
+.div-pessoas button{width:38px;height:38px;border-radius:50%;border:.5px solid var(--border2);background:var(--bg);color:var(--text);font-size:20px;line-height:1;cursor:pointer;font-family:inherit}
 .div-pessoas span{font-size:14px;color:var(--text2)}
-.div-pessoas input[type=text]{width:52px;margin:0 4px 0 0;padding:6px 4px;text-align:center;font-size:18px;font-weight:700;color:var(--text);border:.5px solid var(--border2);border-radius:8px;background:var(--bg2)}
+.div-pessoas input[type=text]{width:52px;margin:0 4px 0 0;padding:6px 4px;text-align:center;font-size:18px;font-weight:700;color:var(--text);border:.5px solid var(--border2);border-radius:8px;background:var(--bg)}
 .div-resumo{font-size:13px;color:var(--text2);margin-top:10px;line-height:1.5}
 .div-resumo:empty{display:none}
 .div-resumo b{color:var(--text)}
@@ -86,8 +86,10 @@ select,input[type=text],input[type=number],input[type=date],textarea{
 }
 select:focus,input:focus,textarea:focus{border-color:var(--primary)}
 textarea{resize:vertical;min-height:68px}
+.modal select,.modal input[type=text],.modal input[type=number],.modal input[type=date],.modal textarea,
+.card select,.card input[type=text],.card input[type=number],.card input[type=date],.card textarea{background:var(--bg)}
 
-.btn{width:100%;padding:13px;font-size:15px;font-family:inherit;border:.5px solid var(--border2);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;font-weight:500;transition:opacity .15s}
+.btn{width:100%;padding:13px;font-size:15px;font-family:inherit;border:.5px solid var(--border2);border-radius:var(--radius-sm);background:var(--bg2);color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;font-weight:500;transition:opacity .15s}
 .btn:active{opacity:.65}
 .btn-primary{background:var(--primary);color:var(--primary-fg);border-color:var(--primary)}
 .btn-sm{padding:7px 13px;font-size:13px;width:auto}
@@ -96,10 +98,10 @@ textarea{resize:vertical;min-height:68px}
 .mt8{margin-top:8px}.mt12{margin-top:12px}.mt16{margin-top:16px}
 
 .tipo-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0 4px}
-.tipo-btn{padding:11px 8px;font-size:14px;font-family:inherit;border:.5px solid var(--border2);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s}
+.tipo-btn{padding:11px 8px;font-size:14px;font-family:inherit;border:.5px solid var(--border2);border-radius:var(--radius-sm);background:var(--bg2);color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s}
 .tipo-btn.sel{background:var(--primary);color:var(--primary-fg);border-color:var(--primary)}
 
-.card{background:var(--bg);border:.5px solid var(--border);border-radius:var(--radius);padding:13px 15px;margin-bottom:10px}
+.card{background:var(--bg2);border:.5px solid var(--border);border-radius:var(--radius);padding:13px 15px;margin-bottom:10px}
 .info-card{background:var(--bg2);border-radius:var(--radius);padding:13px 15px;margin-bottom:10px}
 .pf{margin-bottom:9px}.pf:last-child{margin-bottom:0}
 .pf .fl{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em}
@@ -124,7 +126,7 @@ textarea{resize:vertical;min-height:68px}
 .qr-btn:active{background:var(--bg3)}
 .qr-btn .icon{width:18px;height:18px}
 
-.thumb{display:flex;align-items:center;gap:10px;background:var(--bg2);border-radius:var(--radius-sm);padding:9px 12px;margin-top:6px;font-size:13px}
+.thumb{display:flex;align-items:center;gap:10px;background:var(--bg3);border-radius:var(--radius-sm);padding:9px 12px;margin-top:6px;font-size:13px}
 .thumb .tc{display:flex;align-items:center;gap:10px;flex:1;min-width:0;cursor:pointer}
 .thumb .ti{font-size:20px}
 .thumb .tn{flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -134,7 +136,7 @@ textarea{resize:vertical;min-height:68px}
 .mono{font-family:ui-monospace,"SF Mono","Cascadia Mono","Roboto Mono",Consolas,monospace;font-variant-numeric:tabular-nums}
 
 /* ── card de despesa: faixa colorida por tipo + tags com ícone ── */
-.exp-item{background:var(--bg);border:.5px solid var(--border);border-radius:var(--radius);padding:12px 13px 12px 11px;margin-bottom:10px;display:flex;gap:10px}
+.exp-item{background:var(--bg2);border:.5px solid var(--border);border-radius:var(--radius);padding:12px 13px 12px 11px;margin-bottom:10px;display:flex;gap:10px}
 .exp-stripe{width:3px;align-self:stretch;border-radius:3px;flex-shrink:0;background:var(--blue)}
 .exp-item.tipo-alimentacao .exp-stripe{background:var(--green)}
 .exp-body{flex:1;min-width:0}
@@ -146,13 +148,13 @@ textarea{resize:vertical;min-height:68px}
 .exp-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px;margin-left:8px}
 .exp-val{font-size:15px;font-weight:700;white-space:nowrap;font-family:ui-monospace,"SF Mono","Cascadia Mono","Roboto Mono",Consolas,monospace;font-variant-numeric:tabular-nums}
 .exp-actions{display:flex;align-items:center;gap:6px}
-.exp-actions button{width:28px;height:28px;border-radius:8px;border:.5px solid var(--border2);background:transparent;color:var(--text2);display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer}
+.exp-actions button{width:28px;height:28px;border-radius:8px;border:.5px solid transparent;background:var(--bg3);color:var(--text2);display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer}
 .exp-actions button .icon{width:13px;height:13px}
 .exp-actions button.danger{color:var(--red)}
 .exp-actions button.tag-btn{width:auto;height:28px;padding:0 10px;gap:5px;font-size:12px}
 .exp-actions button:disabled{opacity:.25;cursor:default}
 .exp-actions .spacer{flex:1}
-.exp-actions .stepper{display:flex;flex-direction:column;width:28px;height:28px;border-radius:8px;border:.5px solid var(--border2);overflow:hidden;flex-shrink:0}
+.exp-actions .stepper{display:flex;flex-direction:column;width:28px;height:28px;border-radius:8px;border:.5px solid transparent;background:var(--bg3);overflow:hidden;flex-shrink:0}
 .exp-actions .stepper button{width:28px;height:14px;border-radius:0;border:none;background:transparent;color:var(--text2);display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer}
 .exp-actions .stepper button:first-child{border-bottom:.5px solid var(--border2)}
 .exp-actions .stepper button:disabled{opacity:.25;cursor:default}
@@ -178,20 +180,20 @@ textarea{resize:vertical;min-height:68px}
 .empty .ei{font-size:40px;display:block;margin-bottom:10px;opacity:.3}
 
 /* ── card de evento: selecionado marcado por cor, não por selo ── */
-.ev-card{background:var(--bg);border:.5px solid var(--border);border-radius:var(--radius);padding:13px 15px;margin-bottom:10px;cursor:pointer;position:relative;overflow:hidden}
-.ev-card:active{background:var(--bg2)}
-.ev-card.selected{border-color:var(--primary)}
+.ev-card{background:var(--bg2);border:.5px solid var(--border);border-radius:var(--radius);padding:13px 15px;margin-bottom:10px;cursor:pointer;position:relative;overflow:hidden}
+.ev-card:active{background:var(--bg3)}
+.ev-card.selected{border-color:var(--border)}
 .ev-card.selected::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent)}
 .ev-title{font-size:15px;font-weight:600}
 .ev-sub{font-size:12px;color:var(--text2);margin-top:3px}
-.ev-tomador{display:inline-block;margin-top:6px;padding:3px 9px;border-radius:20px;background:var(--bg2);font-size:10.5px;color:var(--text2)}
+.ev-tomador{display:inline-block;margin-top:6px;padding:3px 9px;border-radius:20px;background:var(--bg3);font-size:10.5px;color:var(--text2)}
 .ev-stat{text-align:right;flex-shrink:0}
 .ev-stat .v{font-weight:700;font-size:14px;font-family:ui-monospace,"SF Mono","Cascadia Mono","Roboto Mono",Consolas,monospace;font-variant-numeric:tabular-nums}
 .ev-stat .n{font-size:10.5px;color:var(--text2);margin-top:2px}
 
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;align-items:flex-end}
 .modal-overlay.open{display:flex}
-.modal{background:var(--bg);border-radius:20px 20px 0 0;padding:20px 16px 40px;width:100%;max-height:92dvh;overflow-y:auto}
+.modal{background:var(--bg2);border-radius:20px 20px 0 0;padding:20px 16px 40px;width:100%;max-height:92dvh;overflow-y:auto}
 .modal h2{font-size:17px;font-weight:600;margin-bottom:16px}
 .modal-close{float:right;background:none;border:none;font-size:22px;cursor:pointer;color:var(--text2);margin-top:-4px}
 
@@ -226,7 +228,7 @@ textarea{resize:vertical;min-height:68px}
   transition:left .35s ease,top .35s ease,width .35s ease,height .35s ease,opacity .25s}
 .tour-highlight::after{content:'';position:absolute;inset:-3px;border-radius:14px;border:3px solid var(--primary);animation:tour-pulso 1.6s ease-out infinite}
 @keyframes tour-pulso{0%{opacity:.9;transform:scale(1)}100%{opacity:0;transform:scale(1.12)}}
-.tour-box{position:fixed;z-index:503;background:var(--bg);border-radius:16px;padding:18px 18px 14px;width:calc(100% - 32px);max-width:380px;
+.tour-box{position:fixed;z-index:503;background:var(--bg2);border-radius:16px;padding:18px 18px 14px;width:calc(100% - 32px);max-width:380px;
   box-shadow:0 10px 36px rgba(0,0,0,.35);left:50%;transform:translateX(-50%);
   transition:top .35s ease,opacity .2s ease}
 .tour-box.trocando{opacity:0}
@@ -369,7 +371,7 @@ textarea{resize:vertical;min-height:68px}
   <div id="screen-eventos" class="screen active">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:10px">
       <h2 class="screen-title" style="margin-bottom:0">Eventos</h2>
-      <button class="btn btn-primary" onclick="openModal('modal-evento');limparModalEvento()" style="width:auto;padding:9px 16px 9px 12px;border-radius:20px;flex-shrink:0"><svg class="icon" style="width:15px;height:15px"><use href="#i-plus"/></svg> Novo</button>
+      <button class="btn btn-primary" onclick="openModal('modal-evento');limparModalEvento()" style="width:auto;padding:7px 14px 7px 10px;font-size:13px;font-weight:600;border-radius:20px;flex-shrink:0"><svg class="icon" style="width:14px;height:14px"><use href="#i-plus"/></svg> Novo</button>
     </div>
     <div class="slabel" style="margin-top:0">Eventos cadastrados</div>
     <div id="eventos-list"></div>

@@ -160,6 +160,21 @@ textarea{resize:vertical;min-height:68px}
 .exp-actions .stepper button:disabled{opacity:.25;cursor:default}
 .exp-actions .stepper .icon{width:10px;height:10px}
 @keyframes nd-flash{0%{background:var(--bg3)}100%{background:transparent}}
+/* Ações do cartão de despesa: alvos de toque maiores sem pesar o visual. Os botões seguem
+   tonais e sem contorno; subir/descer vira uma pílula única com duas metades lado a lado. */
+.exp-item .exp-actions{gap:8px;flex-wrap:wrap;row-gap:6px}
+.exp-item .exp-actions .spacer{display:none}
+.exp-ctrl{display:flex;align-items:center;gap:8px;margin-left:auto;flex-shrink:0}
+.exp-item .exp-actions button{width:36px;height:36px;border-radius:10px;position:relative}
+.exp-item .exp-actions button .icon{width:15px;height:15px}
+.exp-item .exp-actions button.tag-btn{width:auto;height:32px;padding:0 11px}
+.exp-item .exp-actions button.tag-btn .icon{width:13px;height:13px}
+.exp-item .exp-actions button::after{content:'';position:absolute;inset:-4px}
+.exp-item .exp-actions .stepper{flex-direction:row;width:auto;height:36px;border-radius:10px}
+.exp-item .exp-actions .stepper button{width:42px;height:36px;border-radius:0}
+.exp-item .exp-actions .stepper button::after{inset:-4px 0}
+.exp-item .exp-actions .stepper button:first-child{border-bottom:none;border-right:.5px solid var(--border2)}
+.exp-item .exp-actions .stepper .icon{width:15px;height:15px}
 .exp-item.flash{animation:nd-flash .7s ease-out}
 
 /* ── resumo no topo da lista de despesas ─────────────────────── */
@@ -2837,11 +2852,13 @@ function renderDespesas(){
           ${d.attachs&&d.attachs.length?`<button class="tag-btn" onclick="previewDespesaAttach(${d.id},0)" title="Ver comprovante"><svg class="icon"><use href="#i-receipt"/></svg>${d.attachs.length}</button>`:''}
           ${d.divisao&&d.divisao.total?`<span class="tag-div" title="${textoDivisao(d)}">÷ ${d.divisao.pessoas} · nota ${fv(d.divisao.total)}</span>`:''}
           <div class="spacer"></div>
-          <button onclick="editarDespesa(${d.id})" title="Editar" aria-label="Editar"><svg class="icon"><use href="#i-pencil"/></svg></button>
-          <button class="danger" onclick="delDespesa(${d.id})" title="Excluir" aria-label="Excluir"><svg class="icon"><use href="#i-trash"/></svg></button>
-          <div class="stepper">
-            <button onclick="moverDespesa(${d.id},-1)" ${idx===0?'disabled':''} title="Mover para cima" aria-label="Mover para cima"><svg class="icon"><use href="#i-chevron"/></svg></button>
-            <button onclick="moverDespesa(${d.id},1)" ${idx===desp.length-1?'disabled':''} title="Mover para baixo" aria-label="Mover para baixo"><svg class="icon" style="transform:rotate(180deg)"><use href="#i-chevron"/></svg></button>
+          <div class="exp-ctrl">
+            <button onclick="editarDespesa(${d.id})" title="Editar" aria-label="Editar"><svg class="icon"><use href="#i-pencil"/></svg></button>
+            <button class="danger" onclick="delDespesa(${d.id})" title="Excluir" aria-label="Excluir"><svg class="icon"><use href="#i-trash"/></svg></button>
+            <div class="stepper">
+              <button onclick="moverDespesa(${d.id},-1)" ${idx===0?'disabled':''} title="Mover para cima" aria-label="Mover para cima"><svg class="icon"><use href="#i-chevron"/></svg></button>
+              <button onclick="moverDespesa(${d.id},1)" ${idx===desp.length-1?'disabled':''} title="Mover para baixo" aria-label="Mover para baixo"><svg class="icon" style="transform:rotate(180deg)"><use href="#i-chevron"/></svg></button>
+            </div>
           </div>
         </div>
       </div>
@@ -4236,11 +4253,13 @@ function inserirDespesasExemplo(){
         <div class="exp-actions" style="margin-top:8px">
           <button class="tag-btn" tabindex="-1" aria-hidden="true"><svg class="icon"><use href="#i-receipt"/></svg>1</button>
           <div class="spacer"></div>
-          <button tabindex="-1" aria-hidden="true"><svg class="icon"><use href="#i-pencil"/></svg></button>
-          <button class="danger" tabindex="-1" aria-hidden="true"><svg class="icon"><use href="#i-trash"/></svg></button>
-          <div class="stepper">
-            <button tabindex="-1" aria-hidden="true" ${idx===0?'disabled':''}><svg class="icon"><use href="#i-chevron"/></svg></button>
-            <button tabindex="-1" aria-hidden="true" ${idx===exemplos.length-1?'disabled':''}><svg class="icon" style="transform:rotate(180deg)"><use href="#i-chevron"/></svg></button>
+          <div class="exp-ctrl">
+            <button tabindex="-1" aria-hidden="true"><svg class="icon"><use href="#i-pencil"/></svg></button>
+            <button class="danger" tabindex="-1" aria-hidden="true"><svg class="icon"><use href="#i-trash"/></svg></button>
+            <div class="stepper">
+              <button tabindex="-1" aria-hidden="true" ${idx===0?'disabled':''}><svg class="icon"><use href="#i-chevron"/></svg></button>
+              <button tabindex="-1" aria-hidden="true" ${idx===exemplos.length-1?'disabled':''}><svg class="icon" style="transform:rotate(180deg)"><use href="#i-chevron"/></svg></button>
+            </div>
           </div>
         </div>
       </div>

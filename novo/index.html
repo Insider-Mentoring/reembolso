@@ -164,6 +164,18 @@ textarea{resize:vertical;min-height:68px}
 
 /* ── resumo no topo da lista de despesas ─────────────────────── */
 .event-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;background:var(--bg2);border-radius:20px;font-size:12.5px;color:var(--text2);max-width:100%}
+button.event-chip{border:none;font-family:inherit;text-align:left;cursor:pointer}
+.ev-sel{position:relative;display:inline-block;max-width:100%}
+.ev-sel-seta{transform:rotate(180deg);opacity:.6;transition:transform .15s}
+.event-chip[aria-expanded="true"] .ev-sel-seta{transform:rotate(0)}
+.ev-sel-menu{position:absolute;top:calc(100% + 6px);left:0;min-width:260px;width:max-content;max-width:calc(100vw - 32px);max-height:55dvh;overflow-y:auto;background:var(--bg2);border:.5px solid var(--border2);border-radius:var(--radius);box-shadow:0 10px 28px rgba(0,0,0,.2);z-index:30;padding:6px}
+.ev-sel-menu[hidden]{display:none}
+.ev-sel-item{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;text-align:left;background:none;border:none;font:inherit;font-size:14px;color:var(--text);padding:10px 12px;border-radius:8px;cursor:pointer}
+.ev-sel-item:active{background:var(--bg3)}
+.ev-sel-item.sel{font-weight:600;background:var(--bg3)}
+.ev-sel-item small{display:block;margin-top:2px;font-size:11.5px;font-weight:400;color:var(--text2)}
+.ev-sel-ok{color:var(--accent);font-weight:700}
+.ev-sel-vazio{padding:10px 12px;font-size:13px;color:var(--text2)}
 .event-chip b{color:var(--text);font-weight:600}
 .summary{background:var(--bg2);border-radius:var(--radius);padding:14px 16px;margin-bottom:14px}
 .summary-top{display:flex;justify-content:space-between;align-items:baseline}
@@ -389,7 +401,6 @@ textarea{resize:vertical;min-height:68px}
     </div>
 
     <div class="card" style="margin-top:8px;margin-bottom:4px">
-      <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Descrição gerada</div>
       <div style="display:flex;align-items:center;gap:8px"><input type="text" id="outro-tipo" aria-label="Título da despesa (toque para editar)" onblur="if(!this.value.trim())sincronizarTitulo(this,tipo)" style="background:none;border:none;padding:0;margin:0;font-size:15px;font-weight:600;width:100%;color:var(--text);outline:none;font-family:inherit" /><svg class="icon" style="width:15px;height:15px;color:var(--text2);flex-shrink:0"><use href="#i-pencil"/></svg></div>
       <div id="desc-preview" style="font-size:13px;color:var(--text2);line-height:1.5;margin-top:2px"></div>
     </div>
@@ -2015,13 +2026,11 @@ Esta ação não pode ser desfeita.`
 // ─── LANÇAR ───────────────────────────────────────────────────
 function renderEventoAtivo(){
   const el=document.getElementById('evento-ativo-info');
-  if(!S.eventoAtivo){
-    el.innerHTML='<div class="alert a-warn">⚠️ Nenhum evento selecionado. Vá em "eventos" e selecione um.</div>';
-    return;
-  }
   const ev=S.eventos.find(e=>e.id===S.eventoAtivo);
-  if(!ev){el.innerHTML='<div class="alert a-warn">⚠️ Evento não encontrado.</div>';return}
-  el.innerHTML=`<span class="event-chip" style="cursor:pointer" onclick="go('eventos')" title="Toque para trocar de evento"><b>${ev.nome}</b>${ev.cidade?' · '+ev.cidade:''} <svg class="icon" style="width:11px;height:11px;display:inline;vertical-align:-1px;opacity:.6;transform:rotate(180deg)"><use href="#i-chevron"/></svg></span>`;
+  // O chip abre uma lista dos eventos ativos aqui mesmo, sem ir para a aba Eventos.
+  const rotulo=ev?`<b>${ev.nome}</b>${ev.cidade?' · '+ev.cidade:''}`:'<b>Selecionar evento</b>';
+  el.innerHTML=`<div class="ev-sel"><button type="button" class="event-chip" id="ev-sel-btn" aria-haspopup="listbox" aria-expanded="false" onclick="toggleSeletorEvento(event)">${rotulo} <svg class="icon ev-sel-seta" style="width:11px;height:11px;flex-shrink:0"><use href="#i-chevron"/></svg></button><div class="ev-sel-menu" id="ev-sel-menu" role="listbox" hidden></div></div>`;
+  if(!ev) return;
   if(ev.inicio){
     // Preenche com a data de início se não tiver data selecionada
     if(!document.getElementById('data').value){
@@ -2031,6 +2040,41 @@ function renderEventoAtivo(){
   calcularDiaAuto();
   atualizarDesc();
 }
+
+
+// ─── Seletor de evento (tela Lançar) ──────────────────────────
+function fecharSeletorEvento(){
+  const menu=document.getElementById('ev-sel-menu'),btn=document.getElementById('ev-sel-btn');
+  if(menu)menu.hidden=true;
+  if(btn)btn.setAttribute('aria-expanded','false');
+}
+function toggleSeletorEvento(e){
+  e.stopPropagation();
+  const menu=document.getElementById('ev-sel-menu'),btn=document.getElementById('ev-sel-btn');
+  if(!menu)return;
+  if(!menu.hidden){fecharSeletorEvento();return}
+  const ativos=S.eventos.filter(x=>!x.arquivado);
+  menu.innerHTML=ativos.length
+    ?ativos.map(x=>{
+      const sel=x.id===S.eventoAtivo;
+      const datas=x.inicio?fd(x.inicio)+(x.fim&&x.fim!==x.inicio?' → '+fd(x.fim):''):'';
+      return `<button type="button" class="ev-sel-item${sel?' sel':''}" role="option" aria-selected="${sel}" onclick="escolherEventoLancar('${x.id}')"><span>${x.nome}${x.cidade?' · '+x.cidade:''}${datas?'<small>'+datas+'</small>':''}</span>${sel?'<span class="ev-sel-ok">✓</span>':''}</button>`;
+    }).join('')
+    :'<div class="ev-sel-vazio">Nenhum evento ativo.<button type="button" class="ev-sel-item" onclick="fecharSeletorEvento();go(\'eventos\')">Criar um evento</button></div>';
+  menu.hidden=false;
+  btn.setAttribute('aria-expanded','true');
+}
+function escolherEventoLancar(id){
+  S.eventoAtivo=id;salvar();
+  const ev=S.eventos.find(e=>e.id===id);
+  const inp=document.getElementById('data');
+  // Se a data escolhida fica fora do período do novo evento, volta para o 1º dia dele.
+  if(ev&&ev.inicio&&inp&&(!inp.value||inp.value<ev.inicio||(ev.fim&&inp.value>ev.fim)))inp.value=ev.inicio;
+  fecharSeletorEvento();
+  renderEventoAtivo();renderEventos();
+}
+document.addEventListener('click',e=>{if(!e.target.closest('.ev-sel'))fecharSeletorEvento()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')fecharSeletorEvento()});
 
 let diaAtivo=1;
 
@@ -4893,7 +4937,6 @@ initGoogle();
     <input type="number" id="edit-dia" style="display:none" />
 
     <div class="card" style="margin-top:10px;margin-bottom:4px">
-      <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Descrição gerada</div>
       <div style="display:flex;align-items:center;gap:8px"><input type="text" id="edit-outro-tipo" aria-label="Título da despesa (toque para editar)" onblur="if(!this.value.trim())sincronizarTitulo(this,editTipo)" style="background:none;border:none;padding:0;margin:0;font-size:15px;font-weight:600;width:100%;color:var(--text);outline:none;font-family:inherit" /><svg class="icon" style="width:15px;height:15px;color:var(--text2);flex-shrink:0"><use href="#i-pencil"/></svg></div>
       <div id="edit-desc-preview" style="font-size:13px;color:var(--text2);line-height:1.5;margin-top:2px"></div>
     </div>

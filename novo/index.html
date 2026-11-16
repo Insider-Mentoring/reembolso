@@ -493,7 +493,7 @@ button.event-chip{border:none;font-family:inherit;text-align:left;cursor:pointer
     <h2 class="screen-title">Gerar</h2>
     <div class="slabel" style="margin-top:0">Evento</div>
     <div id="gerar-evento-sel"></div>
-    <div class="slabel" style="margin-top:4px">Dados da nota</div>
+    <div class="slabel" style="margin-top:16px">Dados da nota</div>
     <label>Número da nota</label>
     <input type="text" id="num-nota" />
     <label>Emissão</label>
@@ -504,13 +504,10 @@ button.event-chip{border:none;font-family:inherit;text-align:left;cursor:pointer
     <input type="date" id="venc-nota" />
     <div id="gerar-preview" style="margin-top:16px"></div>
     <button class="btn btn-primary mt8" id="btn-gerar-pdf" onclick="gerarPDFUnificado()"><svg class="icon" style="width:16px;height:16px"><use href="#i-download"/></svg> Gerar Nota de Débito (PDF)</button>
-    <p style="font-size:12px;color:var(--text2);text-align:center;margin-top:8px">Gera um único PDF com nota + comprovantes</p>
     <button class="btn mt8" id="btn-enviar-email" onclick="enviarEmail()" style="border-color:var(--border2)">
       <svg class="icon" style="width:16px;height:16px"><use href="#i-mail"/></svg> Preparar e-mail para o financeiro
     </button>
-    <p style="font-size:12px;color:var(--text2);text-align:center;margin-top:6px">Abre seu e-mail já preenchido — só anexar o PDF</p>
-    <div class="alert a-warn mt16">⚠️ Não jogue os cupons fiscais originais fora agora — guarde até o reembolso ser efetivamente pago, caso seja preciso conferir algo.</div>
-    <button class="btn btn-danger btn-ghost mt16" onclick="limparEvento()"><svg class="icon" style="width:16px;height:16px"><use href="#i-trash"/></svg> Limpar despesas do evento</button>
+    <div class="alert a-warn" style="margin-top:10px;margin-bottom:0">⚠️ O e-mail não leva o PDF. Anexe a nota gerada antes de enviar.</div>
   </div>
 
   <!-- CONFIG -->
@@ -2043,8 +2040,7 @@ function renderEventoAtivo(){
   const el=document.getElementById('evento-ativo-info');
   const ev=S.eventos.find(e=>e.id===S.eventoAtivo);
   // O chip abre uma lista dos eventos ativos aqui mesmo, sem ir para a aba Eventos.
-  const rotulo=ev?`<b>${ev.nome}</b>${ev.cidade?' · '+ev.cidade:''}`:'<b>Selecionar evento</b>';
-  el.innerHTML=`<div class="ev-sel"><button type="button" class="event-chip" id="ev-sel-btn" aria-haspopup="listbox" aria-expanded="false" onclick="toggleSeletorEvento(event)">${rotulo} <svg class="icon ev-sel-seta" style="width:11px;height:11px;flex-shrink:0"><use href="#i-chevron"/></svg></button><div class="ev-sel-menu" id="ev-sel-menu" role="listbox" hidden></div></div>`;
+  el.innerHTML=chipEventoHtml(ev,'lancar');
   if(!ev) return;
   if(ev.inicio){
     // Preenche com a data de início se não tiver data selecionada
@@ -2057,27 +2053,40 @@ function renderEventoAtivo(){
 }
 
 
-// ─── Seletor de evento (tela Lançar) ──────────────────────────
-function fecharSeletorEvento(){
-  const menu=document.getElementById('ev-sel-menu'),btn=document.getElementById('ev-sel-btn');
-  if(menu)menu.hidden=true;
-  if(btn)btn.setAttribute('aria-expanded','false');
+// ─── Seletor de evento (telas Lançar e Gerar) ─────────────────
+function chipEventoHtml(ev,ctx){
+  const rotulo=ev?`<b>${ev.nome}</b>${ev.cidade?' · '+ev.cidade:''}`:'<b>Selecionar evento</b>';
+  return `<div class="ev-sel"><button type="button" class="event-chip" aria-haspopup="listbox" aria-expanded="false" onclick="toggleSeletorEvento(event,'${ctx}')">${rotulo} <svg class="icon ev-sel-seta" style="width:11px;height:11px;flex-shrink:0"><use href="#i-chevron"/></svg></button><div class="ev-sel-menu" role="listbox" hidden></div></div>`;
 }
-function toggleSeletorEvento(e){
+function fecharSeletorEvento(){
+  document.querySelectorAll('.ev-sel-menu').forEach(m=>m.hidden=true);
+  document.querySelectorAll('.event-chip[aria-expanded]').forEach(b=>b.setAttribute('aria-expanded','false'));
+}
+function toggleSeletorEvento(e,ctx){
   e.stopPropagation();
-  const menu=document.getElementById('ev-sel-menu'),btn=document.getElementById('ev-sel-btn');
+  const btn=e.currentTarget,menu=btn.parentElement.querySelector('.ev-sel-menu');
   if(!menu)return;
-  if(!menu.hidden){fecharSeletorEvento();return}
+  const estavaAberto=!menu.hidden;
+  fecharSeletorEvento();
+  if(estavaAberto)return;
+  const atual=ctx==='gerar'?gerarEventoId:S.eventoAtivo;
   const ativos=S.eventos.filter(x=>!x.arquivado);
   menu.innerHTML=ativos.length
     ?ativos.map(x=>{
-      const sel=x.id===S.eventoAtivo;
+      const sel=x.id===atual;
       const datas=x.inicio?fd(x.inicio)+(x.fim&&x.fim!==x.inicio?' → '+fd(x.fim):''):'';
-      return `<button type="button" class="ev-sel-item${sel?' sel':''}" role="option" aria-selected="${sel}" onclick="escolherEventoLancar('${x.id}')"><span>${x.nome}${x.cidade?' · '+x.cidade:''}${datas?'<small>'+datas+'</small>':''}</span>${sel?'<span class="ev-sel-ok">✓</span>':''}</button>`;
+      return `<button type="button" class="ev-sel-item${sel?' sel':''}" role="option" aria-selected="${sel}" onclick="escolherEvento('${ctx}','${x.id}')"><span>${x.nome}${x.cidade?' · '+x.cidade:''}${datas?'<small>'+datas+'</small>':''}</span>${sel?'<span class="ev-sel-ok">✓</span>':''}</button>`;
     }).join('')
     :'<div class="ev-sel-vazio">Nenhum evento ativo.<button type="button" class="ev-sel-item" onclick="fecharSeletorEvento();go(\'eventos\')">Criar um evento</button></div>';
   menu.hidden=false;
   btn.setAttribute('aria-expanded','true');
+}
+function escolherEvento(ctx,id){
+  fecharSeletorEvento();
+  if(ctx==='gerar'){
+    gerarEventoId=id;
+    renderGerarEvento();renderGerarPreview();
+  } else escolherEventoLancar(id);
 }
 function escolherEventoLancar(id){
   S.eventoAtivo=id;salvar();
@@ -2085,7 +2094,6 @@ function escolherEventoLancar(id){
   const inp=document.getElementById('data');
   // Se a data escolhida fica fora do período do novo evento, volta para o 1º dia dele.
   if(ev&&ev.inicio&&inp&&(!inp.value||inp.value<ev.inicio||(ev.fim&&inp.value>ev.fim)))inp.value=ev.inicio;
-  fecharSeletorEvento();
   renderEventoAtivo();renderEventos();
 }
 document.addEventListener('click',e=>{if(!e.target.closest('.ev-sel'))fecharSeletorEvento()});
@@ -2903,17 +2911,13 @@ function delDespesa(id){
 }
 
 // ─── GERAR ────────────────────────────────────────────────────
+function renderGerarEvento(){
+  const el=document.getElementById('gerar-evento-sel');
+  el.innerHTML=chipEventoHtml(S.eventos.find(e=>e.id===gerarEventoId),'gerar');
+}
 function renderGerar(){
   if(!gerarEventoId&&S.eventoAtivo)gerarEventoId=S.eventoAtivo;
-  const sel=document.getElementById('gerar-evento-sel');
-  sel.innerHTML=S.eventos.filter(ev=>!ev.arquivado).map(ev=>{
-    const desp=S.despesas.filter(d=>d.eventoId===ev.id);
-    const isSel=ev.id===gerarEventoId;
-    return`<div class="ev-card${isSel?' selected':''}" onclick="selecionarGerarEvento('${ev.id}')">
-      <div class="ev-title">${ev.nome}${ev.cidade?' | '+ev.cidade:''}</div>
-      <div class="ev-sub">${ev.tomador} · ${desp.length} despesa(s)${desp.length?' · '+fv(desp.reduce((s,d)=>s+d.valor,0)):''}</div>
-    </div>`;
-  }).join('')||'<div class="alert a-warn">Nenhum evento cadastrado.</div>';
+  renderGerarEvento();
 
   // Só MOSTRA o próximo número — não incrementa/persiste aqui. Antes isso rodava
   // toda vez que a aba "gerar" era aberta, então só de navegar até essa tela já
@@ -2924,13 +2928,6 @@ function renderGerar(){
   document.getElementById('emissao-nota').value=todayStr();
   document.getElementById('ref-nota').value=mesToRef();
   document.getElementById('venc-nota').value=todayStr();
-  renderGerarPreview();
-}
-
-function selecionarGerarEvento(id){
-  gerarEventoId=id;
-  document.querySelectorAll('#gerar-evento-sel .ev-card').forEach(c=>c.classList.remove('selected'));
-  event.currentTarget.classList.add('selected');
   renderGerarPreview();
 }
 
@@ -2961,8 +2958,11 @@ function renderGerarPreview(){
     </div>`;
 
   el.innerHTML=`
-    <div class="alert a-ok" style="margin-bottom:12px">✅ <b>${desp.length}</b> despesa(s) prontas · Total: <b>${fv(total)}</b></div>
     <div class="card" style="padding:14px 16px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px">
+        <span class="summary-label">Resumo das despesas</span>
+        <span style="font-size:12px;color:var(--text2)">${desp.length} ${desp.length===1?'despesa':'despesas'}</span>
+      </div>
       ${barHtml('Transporte','i-car',transp.length,tvTotal,'var(--blue)')}
       ${barHtml('Alimentação','i-fork',alim.length,avTotal,'var(--green)')}
       ${barHtml('Outros','i-plus',outro.length,ovTotal,'var(--amber)')}
@@ -2971,14 +2971,6 @@ function renderGerarPreview(){
         <span style="font-size:18px;font-weight:700">${fv(total)}</span>
       </div>
     </div>`;
-}
-
-function limparEvento(){
-  if(!gerarEventoId){alert('Selecione um evento.');return}
-  const ev=S.eventos.find(e=>e.id===gerarEventoId);
-  if(!confirm('Limpar todas as despesas de "'+(ev?ev.nome:'este evento')+'"?'))return;
-  S.despesas=S.despesas.filter(d=>d.eventoId!==gerarEventoId);
-  salvar();renderGerarPreview();
 }
 
 // ─── GERAR PDF ────────────────────────────────────────────────

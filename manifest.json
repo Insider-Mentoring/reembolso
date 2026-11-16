@@ -6,8 +6,8 @@
   "scope": "/reembolso/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#f0f2f8",
-  "theme_color": "#1b2a6b",
+  "background_color": "#ffffff",
+  "theme_color": "#111111",
   "lang": "pt-BR",
   "icons": [
     { "src": "icon-72.png", "sizes": "72x72", "type": "image/png" },

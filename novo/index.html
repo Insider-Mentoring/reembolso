@@ -283,6 +283,13 @@ button.event-chip{border:none;font-family:inherit;text-align:left;cursor:pointer
   .tour-highlight,.tour-box,.tour-progress > div{transition:none}
   .tour-highlight::after,.tour-aba.mudou{animation:none}
 }
+.cfg-menu{position:fixed;right:12px;top:56px;z-index:60;min-width:250px;max-width:calc(100vw - 24px);background:var(--bg2);border:.5px solid var(--border2);border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.25);padding:6px}
+.cfg-menu[hidden]{display:none}
+.cfg-menu button{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:none;border:none;font:inherit;font-size:14.5px;color:var(--text);padding:12px;border-radius:9px;cursor:pointer}
+.cfg-menu button:active{background:var(--bg3)}
+.cfg-menu button .icon{width:18px;height:18px;flex-shrink:0;color:var(--text2)}
+.cfg-menu button.danger,.cfg-menu button.danger .icon{color:var(--red)}
+.cfg-sep{height:.5px;background:var(--border);margin:4px 6px}
 .btn-help{background:var(--bg2);border:.5px solid var(--border2);border-radius:50%;width:30px;height:30px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text2);flex-shrink:0}
 </style>
 </head>
@@ -306,6 +313,12 @@ button.event-chip{border:none;font-family:inherit;text-align:left;cursor:pointer
 <symbol id="i-cal-tab" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3 9.5h18M8 3v3M16 3v3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="14" r="1.1" fill="currentColor" stroke="none"/><circle cx="12" cy="14" r="1.1" fill="currentColor" stroke="none"/><circle cx="16" cy="14" r="1.1" fill="currentColor" stroke="none"/></symbol>
 <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="4" cy="6" r="1.3" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.3" fill="currentColor" stroke="none"/></symbol>
 <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11.5M7.5 12l4.5 4.5 4.5-4.5M5 20h14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-cog" viewBox="0 0 24 24"><path d="M18.36 9.31 L20.70 9.69 L20.70 14.31 L18.36 14.69 L18.39 14.59 L19.79 16.51 L16.51 19.79 L14.59 18.39 L14.69 18.36 L14.31 20.70 L9.69 20.70 L9.31 18.36 L9.41 18.39 L7.49 19.79 L4.21 16.51 L5.61 14.59 L5.64 14.69 L3.30 14.31 L3.30 9.69 L5.64 9.31 L5.61 9.41 L4.21 7.49 L7.49 4.21 L9.41 5.61 L9.31 5.64 L9.69 3.30 L14.31 3.30 L14.69 5.64 L14.59 5.61 L16.51 4.21 L19.79 7.49 L18.39 9.41Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.9" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+<symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M4.5 20c.6-3.6 3.7-5.6 7.5-5.6s6.9 2 7.5 5.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+<symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M15.8 8.2l-2 5.6-5.6 2 2-5.6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+<symbol id="i-book" viewBox="0 0 24 24"><path d="M5 4.5h10.5a3 3 0 0 1 3 3V20H8a3 3 0 0 1-3-3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M5 17a3 3 0 0 1 3-3h10.5" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+<symbol id="i-chat" viewBox="0 0 24 24"><path d="M4.5 6.5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2H10l-4 3.5V16h0a2 2 0 0 1-1.5-2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+<symbol id="i-logout" viewBox="0 0 24 24"><path d="M10 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2H10M15 8l4 4-4 4M19 12H9.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 3.5v2.3M12 18.2v2.3M20.5 12h-2.3M5.8 12H3.5M17.7 6.3l-1.6 1.6M7.9 16.1l-1.6 1.6M17.7 17.7l-1.6-1.6M7.9 7.9 6.3 6.3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
 <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M4.5 7l7.5 6 7.5-6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 <symbol id="i-qr" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="6" y="6" width="2" height="2" fill="currentColor"/><rect x="13" y="3" width="8" height="8" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="16" y="6" width="2" height="2" fill="currentColor"/><rect x="3" y="13" width="8" height="8" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="6" y="16" width="2" height="2" fill="currentColor"/><rect x="14" y="14" width="3" height="3" fill="currentColor"/><rect x="19" y="14" width="2" height="2" fill="currentColor"/><rect x="14" y="19" width="2" height="2" fill="currentColor"/><rect x="18" y="18" width="3" height="3" fill="currentColor"/></symbol>
@@ -380,10 +393,18 @@ button.event-chip{border:none;font-family:inherit;text-align:left;cursor:pointer
       <div style="display:flex;align-items:center;gap:6px">
         <div id="sync-status" style="font-size:10.5px;color:var(--text3)"></div>
         <button class="btn-help" onclick="alternarTema()" id="btn-tema" title="Alternar tema" style="width:26px;height:26px;font-size:12px">🌙</button>
-        <button class="btn-help" onclick="abrirAjuda()" title="Ajuda" style="width:26px;height:26px;font-size:12px">?</button>
-        <button onclick="fazerLogout()" style="background:none;border:none;font-size:10.5px;color:var(--text3);cursor:pointer;padding:0">Sair</button>
+        <button class="btn-help" id="btn-cfg" onclick="toggleMenuCfg(event)" aria-haspopup="menu" aria-expanded="false" aria-label="Configurações" title="Configurações" style="width:32px;height:32px"><svg class="icon" style="width:18px;height:18px"><use href="#i-cog"/></svg></button>
       </div>
     </div>
+  </div>
+
+  <div class="cfg-menu" id="cfg-menu" role="menu" hidden>
+    <button type="button" role="menuitem" onclick="fecharMenuCfg();go('config')"><svg class="icon"><use href="#i-user"/></svg>Meus dados</button>
+    <button type="button" role="menuitem" onclick="fecharMenuCfg();iniciarTour()"><svg class="icon"><use href="#i-compass"/></svg>Tour interativo</button>
+    <button type="button" role="menuitem" onclick="fecharMenuCfg();abrirAjuda()"><svg class="icon"><use href="#i-book"/></svg>Guia rápido</button>
+    <button type="button" role="menuitem" onclick="fecharMenuCfg();abrirRelato()"><svg class="icon"><use href="#i-chat"/></svg>Relatar problema ou sugerir melhoria</button>
+    <div class="cfg-sep"></div>
+    <button type="button" role="menuitem" class="danger" onclick="fecharMenuCfg();fazerLogout()"><svg class="icon"><use href="#i-logout"/></svg>Sair</button>
   </div>
 
   <nav class="nav">
@@ -391,7 +412,6 @@ button.event-chip{border:none;font-family:inherit;text-align:left;cursor:pointer
     <button onclick="go('lancar')" id="tab-lancar"><span class="ni"><svg class="icon" style="width:19px;height:19px;margin:0 auto"><use href="#i-plus"/></svg></span>lançar</button>
     <button onclick="go('despesas')" id="tab-despesas"><span class="ni"><svg class="icon" style="width:19px;height:19px;margin:0 auto"><use href="#i-list"/></svg></span>despesas</button>
     <button onclick="go('gerar')" id="tab-gerar"><span class="ni"><svg class="icon" style="width:19px;height:19px;margin:0 auto"><use href="#i-download"/></svg></span>gerar</button>
-    <button onclick="go('config')" id="tab-config"><span class="ni"><svg class="icon" style="width:19px;height:19px;margin:0 auto"><use href="#i-gear"/></svg></span>dados</button>
   </nav>
 
   <!-- EVENTOS -->
@@ -549,13 +569,6 @@ button.event-chip{border:none;font-family:inherit;text-align:left;cursor:pointer
     <div class="alert a-warn mt16">
       ⚠️ Prints de tela do banco <b>não são aceitos</b>.<br><br>
       🚗 Uber/99: envie PDF com trajeto completo.
-    </div>
-    <div class="slabel">Suporte</div>
-    <div class="info-card" id="cfg-suporte" style="font-size:13px">
-      <div style="color:var(--text2);margin-bottom:10px;line-height:1.6">
-        Algo não funcionou ou tem uma ideia pra melhorar o app? Conte pra gente — nos problemas, as informações técnicas do app vão junto pra facilitar a correção.
-      </div>
-      <button class="btn btn-sm" onclick="abrirRelato()">💬 Relatar problema ou sugerir melhoria</button>
     </div>
     <div class="slabel">Armazenamento</div>
     <div class="info-card" style="font-size:13px">
@@ -1675,11 +1688,30 @@ function padNum(n){return String(n).padStart(4,'0')}
 function mesToRef(){const now=new Date();const m=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];return m[now.getMonth()]+'-'+String(now.getFullYear()).slice(2)}
 
 // ─── NAV ──────────────────────────────────────────────────────
+
+// ─── Menu de configurações (engrenagem do topo) ───────────────
+function fecharMenuCfg(){
+  const m=document.getElementById('cfg-menu'),b=document.getElementById('btn-cfg');
+  if(m)m.hidden=true;
+  if(b)b.setAttribute('aria-expanded','false');
+}
+function toggleMenuCfg(e){
+  e.stopPropagation();
+  const m=document.getElementById('cfg-menu'),b=document.getElementById('btn-cfg');
+  if(!m.hidden){fecharMenuCfg();return}
+  const hdr=document.querySelector('.hdr');
+  m.style.top=(hdr.getBoundingClientRect().bottom+6)+'px';
+  m.hidden=false;
+  b.setAttribute('aria-expanded','true');
+}
+document.addEventListener('click',e=>{if(!e.target.closest('#cfg-menu'))fecharMenuCfg()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')fecharMenuCfg()});
+
 function go(s){
   document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));
   document.getElementById('screen-'+s).classList.add('active');
-  document.getElementById('tab-'+s).classList.add('active');
+  document.getElementById('tab-'+s)?.classList.add('active');
   window.scrollTo(0,0);
   if(s==='eventos')renderEventos();
   if(s==='lancar')renderEventoAtivo();
@@ -4125,17 +4157,17 @@ const TOUR_STEPS = [
     tab: 'eventos', alvo: ['#eventos-list .tag-btn', '#screen-eventos .btn-primary']
   },
   {
-    title: '⚙️ Seus dados',
-    desc: 'Na aba Dados ficam seus dados pessoais e bancários, que saem impressos na nota. Vale conferir antes do primeiro envio.',
+    title: '⚙️ Configurações',
+    desc: 'Na engrenagem do topo ficam seus dados pessoais e bancários (que saem impressos na nota), o tour, o guia rápido, o suporte e o Sair. Vale conferir seus dados antes do primeiro envio.',
     dica: 'Capriche nos dados bancários: é pra essa conta que o reembolso vai.',
-    tab: 'config', alvo: ['#tab-config']
+    alvo: ['#btn-cfg']
   },
   {
     title: '💬 Fale com a gente',
-    desc: 'Algo não funcionou ou teve uma ideia pra melhorar o app? Toque em "Relatar problema ou sugerir melhoria" e conte pra gente.',
-    dica: 'Nos problemas, as informações técnicas do app vão junto — isso ajuda muito a resolver rápido. Também dá pra abrir pelo ? no topo.',
+    desc: 'Algo não funcionou ou teve uma ideia pra melhorar o app? Toque na engrenagem e escolha "Relatar problema ou sugerir melhoria".',
+    dica: 'Nos problemas, as informações técnicas do app vão junto — isso ajuda muito a resolver rápido.',
     novo: true,
-    tab: 'config', alvo: ['#cfg-suporte']
+    alvo: ['#btn-cfg']
   },
   {
     title: '📲 Instale o app',
@@ -4153,7 +4185,7 @@ const TOUR_STEPS = [
   },
   {
     title: '✅ Pronto!',
-    desc: 'Toque no ? lá em cima a qualquer momento pra rever este tour. Bons eventos! 🚀'
+    desc: 'Toque na engrenagem lá em cima a qualquer momento e escolha Tour interativo pra rever este passo a passo. Bons eventos! 🚀'
   }
 ];
 
@@ -4421,10 +4453,10 @@ function rolarParaAlvoTour(alvo, reduzir){
 // 'mudou' (chegou numa aba nova, sem animação de passagem) ou ''.
 function marcarAbaTour(step, estado){
   const el = document.getElementById('tour-aba');
-  const nome = step.tab ? 'Aba ' + TOUR_ABAS[step.tab] : step.onde;
+  const nome = step.tab==='config' ? 'Menu ⚙️ › Meus dados' : step.tab ? 'Aba ' + TOUR_ABAS[step.tab] : step.onde;
   if(!nome){ el.style.display = 'none'; return; }
   el.style.display = '';
-  el.textContent = estado === 'indo' ? '➡️ Indo para a aba ' + TOUR_ABAS[step.tab] : '📍 ' + nome;
+  el.textContent = estado === 'indo' && step.tab!=='config' ? '➡️ Indo para a aba ' + TOUR_ABAS[step.tab] : '📍 ' + nome;
   el.classList.toggle('mudou', estado !== '');
 }
 
@@ -5059,8 +5091,8 @@ initGoogle();
         <div style="color:var(--text2);font-size:13px">Toque em <b>"Preparar e-mail para o financeiro"</b> — abre seu e-mail já preenchido com destinatário, assunto e mensagem padrão. Só anexe o PDF e envie!</div>
       </div>
       <div style="margin-bottom:16px">
-        <div style="font-weight:600;margin-bottom:4px">⚙️ Dados</div>
-        <div style="color:var(--text2);font-size:13px">Edite seus dados pessoais, bancários, tomadores cadastrados e e-mail de envio.</div>
+        <div style="font-weight:600;margin-bottom:4px">⚙️ Configurações</div>
+        <div style="color:var(--text2);font-size:13px">Na engrenagem do topo: <b>Meus dados</b> (pessoais, bancários, tomadores e e-mail de envio), tour, guia rápido, suporte e Sair.</div>
       </div>
       <div style="background:var(--amber-bg);color:var(--amber);border-radius:8px;padding:10px 12px;font-size:13px">
         ⚠️ <b>Lembre-se:</b> prints de tela do banco não são aceitos. Uber/99 envie o PDF com trajeto completo.

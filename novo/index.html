@@ -2846,27 +2846,6 @@ function showAddMsg(txt,t){
 // Saldo do adiantamento de alimentação do evento (só controle do usuário, não
 // vai pra nota). Conta apenas despesas de Alimentação; `valor` já é a parte da
 // pessoa quando a nota foi dividida.
-function adiantamentoHtml(ev,desp){
-  const adiant=ev&&ev.adiantamento>0?ev.adiantamento:0;
-  if(!adiant) return '';
-  const gasto=desp.filter(d=>d.tipo==='alimentacao').reduce((s,d)=>s+d.valor,0);
-  const resta=Math.round((adiant-gasto)*100)/100;
-  const estourou=resta<0;
-  const pct=Math.min(100,gasto/adiant*100);
-  const cor=estourou?'var(--red)':'var(--green)';
-  return `<div class="summary" style="margin-top:10px">
-      <div class="summary-top">
-        <span class="summary-label">${estourou?'Acima do adiantamento':'Resta do adiantamento'}</span>
-        <span class="summary-total" style="color:${cor}">${fv(Math.abs(resta))}</span>
-      </div>
-      <div class="summary-bar"><span style="width:${pct}%;background:${cor}"></span></div>
-      <div class="summary-legend">
-        <span>Adiantamento · ${fv(adiant)}</span>
-        <span>Alimentação gasta · ${fv(gasto)}</span>
-      </div>
-    </div>`;
-}
-
 // Despesa nova entra no lugar certo pela data (antes da primeira do evento com
 // data posterior), sem mexer na ordem que a pessoa arrumou com as setas.
 function inserirPorData(d){
@@ -2895,33 +2874,12 @@ function renderDespesas(){
   const desp=S.eventoAtivo?S.despesas.filter(d=>d.eventoId===S.eventoAtivo):S.despesas;
   const ev=S.eventoAtivo?S.eventos.find(e=>e.id===S.eventoAtivo):null;
   if(!desp.length){
-    ta.innerHTML=seletorEventoDespesasHtml(ev)+adiantamentoHtml(ev,desp);
+    ta.innerHTML=seletorEventoDespesasHtml(ev)+(ev&&ev.adiantamento>0?resumoEventoHtml(desp,ev,{adiantamento:true}):'');
     el.innerHTML='<div class="empty"><span class="ei">🧾</span>Nenhuma despesa lançada ainda</div>';
     document.getElementById('ordem-bar').innerHTML='';
     return;
   }
-  const total=desp.reduce((s,d)=>s+d.valor,0);
-  const totalTransp=desp.filter(d=>d.tipo==='transporte').reduce((s,d)=>s+d.valor,0);
-  const totalAlim=total-totalTransp;
-  const pctTransp=total?(totalTransp/total*100):0;
-  const pctAlim=100-pctTransp;
-  ta.innerHTML=`
-    ${seletorEventoDespesasHtml(ev)}
-    <div class="summary">
-      <div class="summary-top">
-        <span class="summary-label">Total do evento</span>
-        <span class="summary-total">${fv(total)}</span>
-      </div>
-      <div class="summary-bar">
-        <span style="width:${pctTransp}%;background:var(--blue)"></span>
-        <span style="width:${pctAlim}%;background:var(--green)"></span>
-      </div>
-      <div class="summary-legend">
-        <span><i class="dot" style="background:var(--blue)"></i>Transporte · ${fv(totalTransp)}</span>
-        <span><i class="dot" style="background:var(--green)"></i>Alimentação · ${fv(totalAlim)}</span>
-      </div>
-    </div>
-    ${adiantamentoHtml(ev,desp)}`;
+  ta.innerHTML=seletorEventoDespesasHtml(ev)+resumoEventoHtml(desp,ev,{adiantamento:true});
   document.getElementById('ordem-bar').innerHTML=desp.length>1?'<button type="button" onclick="reordenarPorData()" style="background:none;border:none;color:var(--text2);font:inherit;font-size:13px;padding:4px 2px 8px;cursor:pointer">📅 Ordenar por data</button>':'';
   el.innerHTML=desp.map((d,idx)=>`
     <div class="exp-item${d.tipo!=='transporte'?' tipo-alimentacao':''}" data-id="${d.id}">
@@ -3020,46 +2978,66 @@ function renderGerar(){
   renderGerarPreview();
 }
 
+// Resumo do evento: o mesmo cartão em Despesas e em Gerar. Cabeçalho com a quantidade,
+// uma linha por categoria com barra, o total e (só em Despesas) o saldo do adiantamento,
+// que é um controle pessoal e não vai para a nota.
+function resumoEventoHtml(desp,ev,{titulo='Resumo do evento',totalRotulo='Total do evento',adiantamento=false}={}){
+  const soma=a=>a.reduce((t,d)=>t+d.valor,0);
+  const total=soma(desp);
+  const transp=desp.filter(d=>d.tipo==='transporte');
+  const alim=desp.filter(d=>d.tipo==='alimentacao');
+  const outro=desp.filter(d=>d.tipo==='outro');
+  const largura=v=>total?Math.round((v/total)*100):0;
+  const linha=(rotulo,icone,lista,cor)=>!lista.length?'':
+    `<div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <span style="font-size:13px;display:inline-flex;align-items:center;gap:5px"><svg class="icon" style="width:14px;height:14px"><use href="#${icone}"/></svg> ${rotulo} <span style="color:var(--text2);font-size:12px">(${lista.length}x)</span></span>
+        <span style="font-size:14px;font-weight:600">${fv(soma(lista))}</span>
+      </div>
+      <div style="background:var(--bg3);border-radius:4px;height:6px">
+        <div style="background:${cor};width:${largura(soma(lista))}%;height:6px;border-radius:4px;transition:width .3s"></div>
+      </div>
+    </div>`;
+  const adiant=adiantamento&&ev&&ev.adiantamento>0?ev.adiantamento:0;
+  let saldo='';
+  if(adiant){
+    const gasto=soma(alim);
+    const resta=Math.round((adiant-gasto)*100)/100;
+    const estourou=resta<0;
+    const cor=estourou?'var(--red)':'var(--green)';
+    saldo=`<div style="${desp.length?'border-top:.5px solid var(--border);padding-top:12px;margin-top:12px':''}">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+        <span style="font-size:13px;color:var(--text2)">${estourou?'Acima do adiantamento':'Resta do adiantamento'}</span>
+        <span style="font-size:16px;font-weight:700;color:${cor}">${fv(Math.abs(resta))}</span>
+      </div>
+      <div style="background:var(--bg3);border-radius:4px;height:6px">
+        <div style="background:${cor};width:${Math.min(100,gasto/adiant*100)}%;height:6px;border-radius:4px;transition:width .3s"></div>
+      </div>
+      <div style="font-size:11.5px;color:var(--text2);margin-top:6px">Alimentação gasta ${fv(gasto)} de ${fv(adiant)}</div>
+    </div>`;
+  }
+  return `<div class="card" style="padding:14px 16px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px">
+        <span class="summary-label">${titulo}</span>
+        <span style="font-size:12px;color:var(--text2)">${desp.length} ${desp.length===1?'despesa':'despesas'}</span>
+      </div>
+      ${linha('Transporte','i-car',transp,'var(--blue)')}
+      ${linha('Alimentação','i-fork',alim,'var(--green)')}
+      ${linha('Outros','i-plus',outro,'var(--amber)')}
+      ${desp.length?`<div style="border-top:.5px solid var(--border);padding-top:10px;margin-top:2px;display:flex;justify-content:space-between;align-items:baseline">
+        <span style="font-size:13px;color:var(--text2)">${totalRotulo}</span>
+        <span style="font-size:20px;font-weight:700">${fv(total)}</span>
+      </div>`:''}
+      ${saldo}
+    </div>`;
+}
+
 function renderGerarPreview(){
   const el=document.getElementById('gerar-preview');
   if(!gerarEventoId){el.innerHTML='';return}
   const desp=S.despesas.filter(d=>d.eventoId===gerarEventoId);
   if(!desp.length){el.innerHTML='<div class="alert a-warn">Nenhuma despesa neste evento.</div>';return}
-  const total=desp.reduce((s,d)=>s+d.valor,0);
-  const transp=desp.filter(d=>d.tipo==='transporte');
-  const alim=desp.filter(d=>d.tipo==='alimentacao');
-  const outro=desp.filter(d=>d.tipo==='outro');
-  const tvTotal=transp.reduce((s,d)=>s+d.valor,0);
-  const avTotal=alim.reduce((s,d)=>s+d.valor,0);
-  const ovTotal=outro.reduce((s,d)=>s+d.valor,0);
-
-  const barWidth=(v)=>Math.round((v/total)*100);
-
-  const barHtml=(label,icon,count,val,color)=>count===0?'':
-    `<div style="margin-bottom:12px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-        <span style="font-size:13px;display:inline-flex;align-items:center;gap:5px"><svg class="icon" style="width:14px;height:14px"><use href="#${icon}"/></svg> ${label} <span style="color:var(--text2);font-size:12px">(${count}x)</span></span>
-        <span style="font-size:14px;font-weight:600">${fv(val)}</span>
-      </div>
-      <div style="background:var(--bg3);border-radius:4px;height:6px">
-        <div style="background:${color};width:${barWidth(val)}%;height:6px;border-radius:4px;transition:width .3s"></div>
-      </div>
-    </div>`;
-
-  el.innerHTML=`
-    <div class="card" style="padding:14px 16px">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px">
-        <span class="summary-label">Resumo das despesas</span>
-        <span style="font-size:12px;color:var(--text2)">${desp.length} ${desp.length===1?'despesa':'despesas'}</span>
-      </div>
-      ${barHtml('Transporte','i-car',transp.length,tvTotal,'var(--blue)')}
-      ${barHtml('Alimentação','i-fork',alim.length,avTotal,'var(--green)')}
-      ${barHtml('Outros','i-plus',outro.length,ovTotal,'var(--amber)')}
-      <div style="border-top:.5px solid var(--border);padding-top:10px;margin-top:2px;display:flex;justify-content:space-between">
-        <span style="font-size:13px;color:var(--text2)">Total geral</span>
-        <span style="font-size:18px;font-weight:700">${fv(total)}</span>
-      </div>
-    </div>`;
+  el.innerHTML=resumoEventoHtml(desp,null,{titulo:'Resumo das despesas',totalRotulo:'Total geral'});
 }
 
 // ─── GERAR PDF ────────────────────────────────────────────────

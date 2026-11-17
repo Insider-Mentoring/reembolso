@@ -220,6 +220,7 @@ button.event-chip{border:none;font-family:inherit;text-align:left;cursor:pointer
 
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;align-items:flex-end}
 .modal-overlay.open{display:flex}
+.nota-acoes{position:sticky;bottom:0;display:flex;flex-direction:column;gap:8px;background:var(--bg2);padding:12px 0 calc(16px + env(safe-area-inset-bottom,0px));margin-top:4px;border-top:.5px solid var(--border)}
 .modal{background:var(--bg2);border-radius:20px 20px 0 0;padding:20px 16px 40px;width:100%;max-height:92dvh;overflow-y:auto}
 .modal h2{font-size:17px;font-weight:600;margin-bottom:16px}
 .modal-close{float:right;background:none;border:none;font-size:22px;cursor:pointer;color:var(--text2);margin-top:-4px}
@@ -2680,32 +2681,35 @@ async function mostrarPreviewComprovante(list,i){
 // PDF desenhado dentro do próprio app (pdf.js). O <embed> de PDF não funciona no
 // Chrome do celular: ele entregava o arquivo para outro app visualizador, o que
 // tirava a pessoa do app, e ao fechar o PDF o app reiniciava do zero.
+async function desenharPdfEm(body,bytes,cancelado,maxPaginas){
+  await carregarLib('pdfjs');
+  const pdfjs=window.pdfjsLib;
+  pdfjs.GlobalWorkerOptions.workerSrc=PDFJS_WORKER;
+  const doc=await pdfjs.getDocument({data:bytes}).promise;
+  if(cancelado()){doc.destroy();return 0}
+  body.innerHTML='';
+  const total=doc.numPages,max=Math.min(total,maxPaginas||20);
+  const largura=Math.min(body.clientWidth||340,900);
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  for(let n=1;n<=max;n++){
+    const page=await doc.getPage(n);
+    if(cancelado()){doc.destroy();return 0}
+    const base=page.getViewport({scale:1});
+    const vp=page.getViewport({scale:largura/base.width*dpr});
+    const c=document.createElement('canvas');
+    c.width=Math.round(vp.width);c.height=Math.round(vp.height);
+    c.style.cssText='width:100%;height:auto;display:block;margin:0 0 8px;border-radius:var(--radius-sm);background:#fff;border:.5px solid var(--border)';
+    body.appendChild(c);
+    await page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
+  }
+  if(total>max)body.insertAdjacentHTML('beforeend',`<div style="font-size:12px;color:var(--text2);margin-bottom:8px">Mostrando ${max} de ${total} páginas</div>`);
+  return total;
+}
 async function renderizarPdfNoPreview(body,a,seq){
   body.innerHTML='<div style="padding:40px 0;color:var(--text2)">⏳ Abrindo PDF...</div>';
-  let doc=null;
   try{
-    await carregarLib('pdfjs');
-    const pdfjs=window.pdfjsLib;
-    pdfjs.GlobalWorkerOptions.workerSrc=PDFJS_WORKER;
     const bytes=new Uint8Array(await (await fetch(a.data)).arrayBuffer());
-    doc=await pdfjs.getDocument({data:bytes}).promise;
-    if(seq!==previewSeq){doc.destroy();return}
-    body.innerHTML='';
-    const total=doc.numPages,max=Math.min(total,20);
-    const largura=Math.min(body.clientWidth||340,900);
-    const dpr=Math.min(window.devicePixelRatio||1,2);
-    for(let n=1;n<=max;n++){
-      const page=await doc.getPage(n);
-      if(seq!==previewSeq){doc.destroy();return}
-      const base=page.getViewport({scale:1});
-      const vp=page.getViewport({scale:largura/base.width*dpr});
-      const c=document.createElement('canvas');
-      c.width=Math.round(vp.width);c.height=Math.round(vp.height);
-      c.style.cssText='width:100%;height:auto;display:block;margin:0 0 8px;border-radius:var(--radius-sm);background:#fff;border:.5px solid var(--border)';
-      body.appendChild(c);
-      await page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
-    }
-    if(total>max)body.insertAdjacentHTML('beforeend',`<div style="font-size:12px;color:var(--text2);margin-bottom:8px">Mostrando ${max} de ${total} páginas</div>`);
+    await desenharPdfEm(body,bytes,()=>seq!==previewSeq,20);
   }catch(e){
     if(seq!==previewSeq)return;
     console.warn('Erro ao mostrar PDF:',e);
@@ -3220,16 +3224,75 @@ async function gerarPDFUnificado(){
       }
     }
 
-    // 4. Baixar PDF
+    // 4. Montar o arquivo
     const num=(document.getElementById('num-nota').value||padNum(S.notaCounter+1)).padStart(4,'0');
     const pdfBytes = await pdfDoc.save();
     const blob = new Blob([pdfBytes], {type:'application/pdf'});
 
+    // Em vez de baixar direto, abre a conferência: a pessoa vê a nota (e os
+    // comprovantes) como vão ser enviados e só então confirma.
+    const nomeArquivo = `Nota_de_Debito_N${num}_${ev.nome.replace(/[^a-zA-Z0-9]/g,'_')}.pdf`;
+    notaPendente = {blob, nomeArquivo, ev, num, bytes:pdfBytes, qtd:desp.length, total:desp.reduce((t,d)=>t+d.valor,0)};
+    await abrirConferenciaNota();
+
+  }catch(e){
+    console.error('Erro ao gerar PDF:', e);
+    alert('Erro ao gerar PDF: '+e.message+'\n\nTentando abrir versão HTML...');
+    gerarPDF(); // fallback
+  }finally{
+    btn.textContent='📥 Gerar Nota de Débito (PDF)';
+    btn.disabled=false;
+  }
+}
+
+
+// ─── Conferência da nota antes de baixar ──────────────────────
+let notaPendente=null, notaSeq=0;
+
+async function abrirConferenciaNota(){
+  const n=notaPendente;
+  if(!n)return;
+  const seq=++notaSeq;
+  document.getElementById('nota-resumo').textContent=`Nº ${n.num} · ${n.qtd} ${n.qtd===1?'despesa':'despesas'} · ${fv(n.total)}`;
+  const body=document.getElementById('nota-body');
+  body.innerHTML='<div style="padding:40px 0;color:var(--text2)">⏳ Preparando a visualização...</div>';
+  const conf=document.getElementById('btn-nota-confirmar');
+  conf.disabled=false;
+  if(!document.getElementById('modal-nota').classList.contains('open')) openModal('modal-nota');
+  try{
+    const total=await desenharPdfEm(body,new Uint8Array(n.bytes),()=>seq!==notaSeq,40);
+    if(seq===notaSeq && total) document.getElementById('nota-resumo').textContent+=` · ${total} ${total===1?'página':'páginas'}`;
+  }catch(e){
+    if(seq!==notaSeq)return;
+    console.warn('Erro ao mostrar a nota:',e);
+    body.innerHTML=`<div style="padding:24px 0;color:var(--text2);font-size:13px;line-height:1.6">⚠️ Não consegui mostrar a nota aqui dentro do app.<br>Você pode conferir no visualizador do celular e voltar para confirmar.</div><button type="button" class="btn btn-sm" style="width:auto;margin:0 auto" onclick="abrirNotaExterna()">Abrir PDF no visualizador</button>`;
+  }
+}
+function abrirNotaExterna(){
+  if(!notaPendente)return;
+  window.open(URL.createObjectURL(notaPendente.blob),'_blank');
+}
+function voltarDaConferencia(){
+  notaSeq++;
+  notaPendente=null;
+  closeModal('modal-nota');
+}
+
+// Confirmou: baixa o PDF, consome o número da nota e salva no Drive.
+async function confirmarNota(){
+  const n=notaPendente;
+  if(!n)return;
+  const {blob,nomeArquivo,ev}=n;
+  notaPendente=null;
+  notaSeq++;
+  closeModal('modal-nota');
+  const btn=document.getElementById('btn-gerar-pdf');
+  btn.disabled=true;
+  try{
     // Download local
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    const nomeArquivo = `Nota_de_Debito_N${num}_${ev.nome.replace(/[^a-zA-Z0-9]/g,'_')}.pdf`;
     a.download = nomeArquivo;
     a.click();
     URL.revokeObjectURL(url);
@@ -3284,9 +3347,8 @@ async function gerarPDFUnificado(){
     }
 
   }catch(e){
-    console.error('Erro ao gerar PDF:', e);
-    alert('Erro ao gerar PDF: '+e.message+'\n\nTentando abrir versão HTML...');
-    gerarPDF(); // fallback
+    console.error('Erro ao finalizar a nota:',e);
+    mostrarToast('⚠️ Erro ao salvar a nota: '+e.message,'err');
   }finally{
     btn.textContent='📥 Gerar Nota de Débito (PDF)';
     btn.disabled=false;
@@ -5110,6 +5172,20 @@ initGoogle();
       <button class="btn btn-sm" onclick="avancarPreview(-1)">‹ Anterior</button>
       <span id="preview-counter" style="font-size:13px;color:var(--text2)"></span>
       <button class="btn btn-sm" onclick="avancarPreview(1)">Próximo ›</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CONFERÊNCIA DA NOTA -->
+<div class="modal-overlay" id="modal-nota">
+  <div class="modal" style="padding-bottom:0">
+    <button class="modal-close" onclick="voltarDaConferencia()">✕</button>
+    <h2>Conferir nota de débito</h2>
+    <p id="nota-resumo" style="font-size:13px;color:var(--text2);margin:-4px 0 12px"></p>
+    <div id="nota-body" style="text-align:center"></div>
+    <div class="nota-acoes">
+      <button type="button" class="btn btn-primary" id="btn-nota-confirmar" onclick="confirmarNota()">✅ Confirmar e baixar</button>
+      <button type="button" class="btn" onclick="voltarDaConferencia()">Voltar e ajustar</button>
     </div>
   </div>
 </div>

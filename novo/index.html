@@ -428,6 +428,7 @@ button.event-chip{border:none;font-family:inherit;text-align:left;cursor:pointer
 
   <!-- LANÇAR -->
   <div id="screen-lancar" class="screen">
+    <div class="slabel" style="margin-top:0">Evento</div>
     <div id="evento-ativo-info"></div>
 
     <div class="slabel">Tipo</div>
@@ -2105,7 +2106,7 @@ function toggleSeletorEvento(e,ctx){
   const estavaAberto=!menu.hidden;
   fecharSeletorEvento();
   if(estavaAberto)return;
-  const atual=ctx==='gerar'?gerarEventoId:S.eventoAtivo;
+  const atual=S.eventoAtivo;
   const ativos=S.eventos.filter(x=>!x.arquivado);
   menu.innerHTML=ativos.length
     ?ativos.map(x=>{
@@ -2117,20 +2118,16 @@ function toggleSeletorEvento(e,ctx){
   menu.hidden=false;
   btn.setAttribute('aria-expanded','true');
 }
+// O evento escolhido vale para as três abas (Lançar, Despesas e Gerar).
 function escolherEvento(ctx,id){
   fecharSeletorEvento();
-  if(ctx==='gerar'){
-    gerarEventoId=id;
-    renderGerarEvento();renderGerarPreview();
-  } else escolherEventoLancar(id);
-}
-function escolherEventoLancar(id){
-  S.eventoAtivo=id;salvar();
+  S.eventoAtivo=id;gerarEventoId=id;salvar();
   const ev=S.eventos.find(e=>e.id===id);
   const inp=document.getElementById('data');
-  // Se a data escolhida fica fora do período do novo evento, volta para o 1º dia dele.
+  // Se a data escolhida em Lançar fica fora do período do novo evento, volta para o 1º dia dele.
   if(ev&&ev.inicio&&inp&&(!inp.value||inp.value<ev.inicio||(ev.fim&&inp.value>ev.fim)))inp.value=ev.inicio;
-  renderEventoAtivo();renderEventos();
+  renderEventoAtivo();renderEventos();renderDespesas();
+  if(ctx==='gerar'){renderGerarEvento();renderGerarPreview();}
 }
 document.addEventListener('click',e=>{if(!e.target.closest('.ev-sel'))fecharSeletorEvento()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')fecharSeletorEvento()});
@@ -2886,13 +2883,17 @@ function reordenarPorData(){
   mostrarToast('📅 Ordenadas por data','ok');
 }
 
+function seletorEventoDespesasHtml(ev){
+  return '<div class="slabel" style="margin-top:0">Evento</div><div style="margin-bottom:12px">'+chipEventoHtml(ev,'despesas')+'</div>';
+}
+
 function renderDespesas(){
   const el=document.getElementById('despesas-list');
   const ta=document.getElementById('total-area');
   const desp=S.eventoAtivo?S.despesas.filter(d=>d.eventoId===S.eventoAtivo):S.despesas;
   const ev=S.eventoAtivo?S.eventos.find(e=>e.id===S.eventoAtivo):null;
   if(!desp.length){
-    ta.innerHTML=(ev?`<span class="event-chip" style="margin-bottom:10px"><b>${ev.nome}</b>${ev.cidade?' · '+ev.cidade:''}</span>`:'')+adiantamentoHtml(ev,desp);
+    ta.innerHTML=seletorEventoDespesasHtml(ev)+adiantamentoHtml(ev,desp);
     el.innerHTML='<div class="empty"><span class="ei">🧾</span>Nenhuma despesa lançada ainda</div>';
     document.getElementById('ordem-bar').innerHTML='';
     return;
@@ -2903,7 +2904,7 @@ function renderDespesas(){
   const pctTransp=total?(totalTransp/total*100):0;
   const pctAlim=100-pctTransp;
   ta.innerHTML=`
-    ${ev?`<span class="event-chip" style="margin-bottom:10px"><b>${ev.nome}</b>${ev.cidade?' · '+ev.cidade:''}</span>`:''}
+    ${seletorEventoDespesasHtml(ev)}
     <div class="summary">
       <div class="summary-top">
         <span class="summary-label">Total do evento</span>
@@ -3002,7 +3003,7 @@ function renderGerarEvento(){
   el.innerHTML=chipEventoHtml(S.eventos.find(e=>e.id===gerarEventoId),'gerar');
 }
 function renderGerar(){
-  if(!gerarEventoId&&S.eventoAtivo)gerarEventoId=S.eventoAtivo;
+  if(S.eventoAtivo)gerarEventoId=S.eventoAtivo;
   renderGerarEvento();
 
   // Só MOSTRA o próximo número — não incrementa/persiste aqui. Antes isso rodava

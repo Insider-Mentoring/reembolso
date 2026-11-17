@@ -615,7 +615,10 @@ const LIBS={
   pdf:'https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js',
   canvas:'https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js',
   zxing:'https://unpkg.com/@zxing/library@0.23.0/umd/index.min.js',
+  // Só para mostrar PDF dentro do app (carregado na primeira vez que se abre um PDF).
+  pdfjs:'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js',
 };
+const PDFJS_WORKER='https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
 const libsCarregando={};
 function carregarLib(nome){
   if(!libsCarregando[nome]){
@@ -630,7 +633,7 @@ function carregarLib(nome){
   return libsCarregando[nome];
 }
 function precarregarLibs(){
-  const vai=()=>Object.keys(LIBS).forEach(n=>carregarLib(n).catch(()=>{}));
+  const vai=()=>Object.keys(LIBS).filter(n=>n!=='pdfjs').forEach(n=>carregarLib(n).catch(()=>{}));
   if('requestIdleCallback' in window) requestIdleCallback(vai,{timeout:4000}); else setTimeout(vai,1500);
 }
 
@@ -2614,7 +2617,7 @@ function rmAttach(i){
   attachs.splice(i,1);renderAttachs()
 }
 
-let previewList=null, previewIndex=0;
+let previewList=null, previewIndex=0, previewSeq=0;
 
 async function previewAttach(arrName,i){
   const list=arrName==='editAttachs'?editAttachs:attachs;
@@ -2632,6 +2635,7 @@ async function mostrarPreviewComprovante(list,i){
   const a=list&&list[i];
   if(!a)return;
   previewList=list; previewIndex=i;
+  const seq=++previewSeq;
 
   const body=document.getElementById('preview-body');
   document.getElementById('preview-title').textContent=a.name||'Comprovante';
@@ -2665,11 +2669,57 @@ async function mostrarPreviewComprovante(list,i){
     openModal('modal-preview');
   }
 
+  if(seq!==previewSeq)return;
   if(a.type.includes('pdf')){
-    body.innerHTML=`<embed src="${a.data}" type="application/pdf" style="width:100%;height:75vh;border:none;border-radius:var(--radius-sm)" />`;
+    await renderizarPdfNoPreview(body,a,seq);
   }else{
     body.innerHTML=`<img src="${a.data}" style="max-width:100%;max-height:78vh;border-radius:var(--radius-sm)" />`;
   }
+}
+
+// PDF desenhado dentro do próprio app (pdf.js). O <embed> de PDF não funciona no
+// Chrome do celular: ele entregava o arquivo para outro app visualizador, o que
+// tirava a pessoa do app, e ao fechar o PDF o app reiniciava do zero.
+async function renderizarPdfNoPreview(body,a,seq){
+  body.innerHTML='<div style="padding:40px 0;color:var(--text2)">⏳ Abrindo PDF...</div>';
+  let doc=null;
+  try{
+    await carregarLib('pdfjs');
+    const pdfjs=window.pdfjsLib;
+    pdfjs.GlobalWorkerOptions.workerSrc=PDFJS_WORKER;
+    const bytes=new Uint8Array(await (await fetch(a.data)).arrayBuffer());
+    doc=await pdfjs.getDocument({data:bytes}).promise;
+    if(seq!==previewSeq){doc.destroy();return}
+    body.innerHTML='';
+    const total=doc.numPages,max=Math.min(total,20);
+    const largura=Math.min(body.clientWidth||340,900);
+    const dpr=Math.min(window.devicePixelRatio||1,2);
+    for(let n=1;n<=max;n++){
+      const page=await doc.getPage(n);
+      if(seq!==previewSeq){doc.destroy();return}
+      const base=page.getViewport({scale:1});
+      const vp=page.getViewport({scale:largura/base.width*dpr});
+      const c=document.createElement('canvas');
+      c.width=Math.round(vp.width);c.height=Math.round(vp.height);
+      c.style.cssText='width:100%;height:auto;display:block;margin:0 0 8px;border-radius:var(--radius-sm);background:#fff;border:.5px solid var(--border)';
+      body.appendChild(c);
+      await page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
+    }
+    if(total>max)body.insertAdjacentHTML('beforeend',`<div style="font-size:12px;color:var(--text2);margin-bottom:8px">Mostrando ${max} de ${total} páginas</div>`);
+  }catch(e){
+    if(seq!==previewSeq)return;
+    console.warn('Erro ao mostrar PDF:',e);
+    body.innerHTML=`<div style="padding:24px 0;color:var(--text2);font-size:13px;line-height:1.6">⚠️ Não consegui mostrar esse PDF aqui dentro do app.<br>Você pode abrir no visualizador do celular — ao fechar, volte para o app.</div><button type="button" class="btn btn-sm" style="width:auto;margin:0 auto" onclick="abrirPdfExterno()">Abrir PDF no visualizador</button>`;
+  }
+}
+// Só por toque explícito: abrir no visualizador do celular pode tirar o app da frente.
+async function abrirPdfExterno(){
+  const a=previewList&&previewList[previewIndex];
+  if(!a||!a.data)return;
+  try{
+    const blob=await (await fetch(a.data)).blob();
+    window.open(URL.createObjectURL(new Blob([blob],{type:'application/pdf'})),'_blank');
+  }catch(e){mostrarToast('⚠️ Não consegui abrir o PDF','err')}
 }
 
 function avancarPreview(delta){

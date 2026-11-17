@@ -60,6 +60,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .screen{display:none;padding:16px;padding-bottom:96px}
 .screen.active{display:block}
 .screen-title{font-size:19px;font-weight:700;letter-spacing:-.2px;margin-bottom:16px}
+/* Título só para leitores de tela: o nome da aba já aparece destacado na barra de baixo. */
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 
 .slabel{font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.08em;margin:20px 0 8px}
 .slabel:first-child{margin-top:0}
@@ -504,7 +506,7 @@ button.event-chip{border:none;font-family:inherit;text-align:left;cursor:pointer
 
   <!-- DESPESAS -->
   <div id="screen-despesas" class="screen">
-    <h2 class="screen-title">Despesas</h2>
+    <h2 class="sr-only">Despesas</h2>
     <div id="total-area"></div>
     <div id="ordem-bar" style="text-align:right"></div>
     <div id="despesas-list"></div>
@@ -512,7 +514,7 @@ button.event-chip{border:none;font-family:inherit;text-align:left;cursor:pointer
 
   <!-- GERAR -->
   <div id="screen-gerar" class="screen">
-    <h2 class="screen-title">Gerar</h2>
+    <h2 class="sr-only">Gerar</h2>
     <div class="slabel" style="margin-top:0">Evento</div>
     <div id="gerar-evento-sel"></div>
     <div class="slabel" style="margin-top:16px">Dados da nota</div>

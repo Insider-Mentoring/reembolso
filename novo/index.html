@@ -526,8 +526,8 @@ button.event-chip{border:none;font-family:inherit;text-align:left;cursor:pointer
     <input type="text" id="ref-nota" placeholder="Ex: Jun-26" />
     <label>Vencimento</label>
     <input type="date" id="venc-nota" />
-    <div id="gerar-preview" style="margin-top:16px"></div>
-    <button class="btn btn-primary mt8" id="btn-gerar-pdf" onclick="gerarPDFUnificado()"><svg class="icon" style="width:16px;height:16px"><use href="#i-download"/></svg> Gerar Nota de Débito (PDF)</button>
+    <div id="gerar-preview"></div>
+    <button class="btn btn-primary mt16" id="btn-gerar-pdf" onclick="gerarPDFUnificado()"><svg class="icon" style="width:16px;height:16px"><use href="#i-download"/></svg> Gerar Nota de Débito (PDF)</button>
     <button class="btn mt8" id="btn-enviar-email" onclick="enviarEmail()" style="border-color:var(--border2)">
       <svg class="icon" style="width:16px;height:16px"><use href="#i-mail"/></svg> Preparar e-mail para o financeiro
     </button>
@@ -3037,7 +3037,8 @@ function renderGerarPreview(){
   if(!gerarEventoId){el.innerHTML='';return}
   const desp=S.despesas.filter(d=>d.eventoId===gerarEventoId);
   if(!desp.length){el.innerHTML='<div class="alert a-warn">Nenhuma despesa neste evento.</div>';return}
-  el.innerHTML=resumoEventoHtml(desp,null,{titulo:'Resumo das despesas',totalRotulo:'Total geral'});
+  // O resumo fica só na aba Despesas; aqui a conferência da nota já mostra total e quantidade.
+  el.innerHTML='';
 }
 
 // ─── GERAR PDF ────────────────────────────────────────────────

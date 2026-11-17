@@ -526,8 +526,8 @@ button.event-chip{border:none;font-family:inherit;text-align:left;cursor:pointer
     <input type="text" id="ref-nota" placeholder="Ex: Jun-26" />
     <label>Vencimento</label>
     <input type="date" id="venc-nota" />
-    <div id="gerar-preview"></div>
-    <button class="btn btn-primary mt16" id="btn-gerar-pdf" onclick="gerarPDFUnificado()"><svg class="icon" style="width:16px;height:16px"><use href="#i-download"/></svg> Gerar Nota de Débito (PDF)</button>
+    <div id="gerar-preview" style="margin-top:16px"></div>
+    <button class="btn btn-primary mt8" id="btn-gerar-pdf" onclick="gerarPDFUnificado()"><svg class="icon" style="width:16px;height:16px"><use href="#i-download"/></svg> Gerar Nota de Débito (PDF)</button>
     <button class="btn mt8" id="btn-enviar-email" onclick="enviarEmail()" style="border-color:var(--border2)">
       <svg class="icon" style="width:16px;height:16px"><use href="#i-mail"/></svg> Preparar e-mail para o financeiro
     </button>
@@ -3038,7 +3038,9 @@ function renderGerarPreview(){
   const desp=S.despesas.filter(d=>d.eventoId===gerarEventoId);
   if(!desp.length){el.innerHTML='<div class="alert a-warn">Nenhuma despesa neste evento.</div>';return}
   // O resumo fica só na aba Despesas; aqui a conferência da nota já mostra total e quantidade.
-  el.innerHTML='';
+  // Só avisa quando há despesa sem comprovante anexado (o link da NF-e sozinho não conta).
+  const sem=desp.filter(d=>!(d.attachs&&d.attachs.length)).length;
+  el.innerHTML=sem?`<div class="alert a-warn" style="margin-bottom:12px">⚠️ ${sem===1?'1 despesa sem comprovante':sem+' despesas sem comprovante'}. <button type="button" onclick="go('despesas')" style="background:none;border:none;padding:0;font:inherit;color:inherit;text-decoration:underline;cursor:pointer">Ver em Despesas</button></div>`:'';
 }
 
 // ─── GERAR PDF ────────────────────────────────────────────────

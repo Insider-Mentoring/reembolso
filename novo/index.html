@@ -220,6 +220,7 @@ button.event-chip{border:none;font-family:inherit;text-align:left;cursor:pointer
 .modal-overlay.open{display:flex}
 .passo{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;border:1.5px solid currentColor;font-size:12px;font-weight:700;line-height:1;flex-shrink:0}
 .btn .sub{display:block;font-size:11.5px;font-weight:400;opacity:.8}
+.btn:disabled{opacity:.45;cursor:not-allowed}
 .gerar-dica{font-size:12px;color:var(--text2);text-align:center;margin-top:8px;line-height:1.5}
 .gerar-dica b{color:var(--text);font-weight:600;word-break:break-all}
 .nota-acoes{position:sticky;bottom:0;display:flex;flex-direction:column;gap:8px;background:var(--bg2);padding:12px 0 calc(16px + env(safe-area-inset-bottom,0px));margin-top:4px;border-top:.5px solid var(--border)}
@@ -3039,22 +3040,28 @@ function quandoNota(iso){
   if(isNaN(d))return '';
   return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})+' às '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
 }
+// Quantas despesas do evento ainda estão sem comprovante anexado (o link da NF-e sozinho não conta).
+function qtdSemComprovante(eventoId){
+  return S.despesas.filter(d=>d.eventoId===eventoId&&semAnexo(d)).length;
+}
 function renderGerarAcoes(){
   const el=document.getElementById('gerar-acoes');
   if(!el)return;
   const ev=S.eventos.find(e=>e.id===gerarEventoId);
   const n=ev&&ev.ultimaNota;
+  const bloqueada=!!ev&&qtdSemComprovante(ev.id)>0;
+  const bloq=bloqueada?' disabled':'';
   const passo=t=>`<span class="passo">${t}</span>`;
   el.innerHTML=n
-    ?`<button class="btn mt8" id="btn-gerar-pdf" onclick="gerarPDFUnificado()" style="flex-direction:column;gap:2px;padding:10px 13px">
+    ?`<button class="btn mt8" id="btn-gerar-pdf" onclick="gerarPDFUnificado()"${bloq} style="flex-direction:column;gap:2px;padding:10px 13px">
         <span style="display:inline-flex;align-items:center;gap:8px">${passo('✓')} Nota nº ${n.num} gerada</span>
         <span class="sub">${quandoNota(n.em)} · toque para gerar outra</span>
       </button>
       <button class="btn btn-primary mt8" id="btn-enviar-email" onclick="enviarEmail()">${passo('2')} Enviar ao financeiro</button>
       <div class="gerar-dica">Anexe <b>${n.arquivo}</b> (está nos Downloads e no Drive do evento).</div>`
-    :`<button class="btn btn-primary mt8" id="btn-gerar-pdf" onclick="gerarPDFUnificado()">${passo('1')} Gerar Nota de Débito (PDF)</button>
+    :`<button class="btn btn-primary mt8" id="btn-gerar-pdf" onclick="gerarPDFUnificado()"${bloq}>${passo('1')} Gerar Nota de Débito (PDF)</button>
       <button class="btn mt8" id="btn-enviar-email" onclick="enviarEmail()">${passo('2')} Enviar ao financeiro</button>
-      <div class="gerar-dica">Gere a nota primeiro.</div>`;
+      <div class="gerar-dica">${bloqueada?'Anexe os comprovantes que faltam para liberar a nota.':'Gere a nota primeiro.'}</div>`;
 }
 
 function renderGerarEvento(){
@@ -3149,7 +3156,7 @@ function renderGerarPreview(){
   // O resumo fica só na aba Despesas; aqui a conferência da nota já mostra total e quantidade.
   // Só avisa quando há despesa sem comprovante anexado (o link da NF-e sozinho não conta).
   const sem=desp.filter(semAnexo).length;
-  el.innerHTML=sem?`<div class="alert a-warn" style="margin-bottom:12px">⚠️ ${sem===1?'1 despesa sem comprovante':sem+' despesas sem comprovante'}. <button type="button" onclick="verDespesasSemComprovante()" style="background:none;border:none;padding:0;font:inherit;color:inherit;text-decoration:underline;cursor:pointer">Ver em Despesas</button></div>`:'';
+  el.innerHTML=sem?`<div class="alert a-warn" style="margin-bottom:12px">⚠️ ${sem===1?'1 despesa sem comprovante':sem+' despesas sem comprovante'}. Anexe para poder gerar a nota. <button type="button" onclick="verDespesasSemComprovante()" style="background:none;border:none;padding:0;font:inherit;color:inherit;text-decoration:underline;cursor:pointer">Ver em Despesas</button></div>`:'';
 }
 
 // ─── GERAR PDF ────────────────────────────────────────────────
@@ -3215,6 +3222,7 @@ async function gerarPDFUnificado(){
   if(!ev){alert('Evento não encontrado.');return}
   const desp=S.despesas.filter(d=>d.eventoId===gerarEventoId);
   if(!desp.length){alert('Nenhuma despesa neste evento.');return}
+  if(desp.some(semAnexo)){mostrarToast('⚠️ Anexe o comprovante das despesas em destaque para gerar a nota','err');verDespesasSemComprovante();return}
 
   const btn=document.getElementById('btn-gerar-pdf');
   btn.disabled=true;
@@ -3371,7 +3379,7 @@ function voltarDaConferencia(){
 }
 
 // Confirmou: baixa o PDF, consome o número da nota e salva no Drive.
-async function confirmarNota(opts={}){
+async function confirmarNota(){
   const n=notaPendente;
   if(!n)return;
   const {blob,nomeArquivo,ev}=n;
@@ -3441,12 +3449,6 @@ async function confirmarNota(opts={}){
     }
 
     renderGerarAcoes();
-    // "Baixar e enviar": depois de salvar no Drive, abre o e-mail. Se o navegador já não
-    // considera que foi um toque da pessoa (o Drive demorou), o botão "Enviar ao financeiro" fica em destaque.
-    if(opts.enviar){
-      if(!navigator.userActivation||navigator.userActivation.isActive)enviarEmail();
-      else mostrarToast('✅ Nota salva. Toque em "Enviar ao financeiro".','ok');
-    }
   }catch(e){
     console.error('Erro ao finalizar a nota:',e);
     mostrarToast('⚠️ Erro ao salvar a nota: '+e.message,'err');
@@ -5240,7 +5242,6 @@ initGoogle();
     <div id="nota-body" style="text-align:center"></div>
     <div class="nota-acoes">
       <button type="button" class="btn btn-primary" id="btn-nota-confirmar" onclick="confirmarNota()">✅ Confirmar e baixar</button>
-      <button type="button" class="btn" onclick="confirmarNota({enviar:true})">📧 Baixar e enviar por e-mail</button>
       <button type="button" class="btn" onclick="voltarDaConferencia()">Voltar e ajustar</button>
     </div>
   </div>

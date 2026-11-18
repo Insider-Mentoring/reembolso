@@ -3143,23 +3143,16 @@ function verDespesasSemComprovante(){
   setTimeout(()=>document.querySelector('.exp-item.sem-anexo')?.scrollIntoView({block:'center',behavior:'smooth'}),60);
 }
 
-function resumoEventoHtml(desp,ev,{titulo='Resumo do evento',totalRotulo='Total do evento',adiantamento=false}={}){
+function resumoEventoHtml(desp,ev,{titulo='Resumo do evento',totalRotulo='Total',adiantamento=false}={}){
   const soma=a=>a.reduce((t,d)=>t+d.valor,0);
   const total=soma(desp);
   const transp=desp.filter(d=>d.tipo==='transporte');
   const alim=desp.filter(d=>d.tipo==='alimentacao');
   const outro=desp.filter(d=>d.tipo==='outro');
-  const largura=v=>total?Math.round((v/total)*100):0;
-  const linha=(rotulo,icone,lista,cor)=>!lista.length?'':
-    `<div style="margin-bottom:12px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-        <span style="font-size:13px;display:inline-flex;align-items:center;gap:5px"><svg class="icon" style="width:14px;height:14px"><use href="#${icone}"/></svg> ${rotulo} <span style="color:var(--text2);font-size:12px">(${lista.length}x)</span></span>
-        <span style="font-size:14px;font-weight:600">${fv(soma(lista))}</span>
-      </div>
-      <div style="background:var(--bg3);border-radius:4px;height:6px">
-        <div style="background:${cor};width:${largura(soma(lista))}%;height:6px;border-radius:4px;transition:width .3s"></div>
-      </div>
-    </div>`;
+  const cats=[['Transporte',transp,'var(--blue)'],['Alimentação',alim,'var(--green)'],['Outros',outro,'var(--amber)']].filter(c=>c[1].length);
+  const pct=v=>total?(v/total*100):0;
+  const barra=cats.map(([n,l,cor])=>`<span style="width:${pct(soma(l))}%;background:${cor}"></span>`).join('');
+  const legenda=cats.map(([n,l,cor])=>`<span style="white-space:nowrap"><i class="dot" style="background:${cor};margin-right:5px"></i>${n} <b style="color:var(--text)">${fv(soma(l))}</b></span>`).join('');
   const adiant=adiantamento&&ev&&ev.adiantamento>0?ev.adiantamento:0;
   let saldo='';
   if(adiant){
@@ -3167,29 +3160,22 @@ function resumoEventoHtml(desp,ev,{titulo='Resumo do evento',totalRotulo='Total 
     const resta=Math.round((adiant-gasto)*100)/100;
     const estourou=resta<0;
     const cor=estourou?'var(--red)':'var(--green)';
-    saldo=`<div style="${desp.length?'border-top:.5px solid var(--border);padding-top:12px;margin-top:12px':''}">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
-        <span style="font-size:13px;color:var(--text2)">${estourou?'Acima do adiantamento':'Resta do adiantamento'}</span>
-        <span style="font-size:16px;font-weight:700;color:${cor}">${fv(Math.abs(resta))}</span>
+    saldo=`<div style="${desp.length?'border-top:.5px solid var(--border);padding-top:9px;margin-top:9px':'margin-top:8px'}">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+        <span style="font-size:12.5px;color:var(--text2)">${estourou?'Acima do adiantamento':'Resta do adiantamento'} <span style="opacity:.75">· de ${fv(adiant)}</span></span>
+        <span style="font-size:14.5px;font-weight:700;color:${cor};white-space:nowrap">${fv(Math.abs(resta))}</span>
       </div>
-      <div style="background:var(--bg3);border-radius:4px;height:6px">
-        <div style="background:${cor};width:${Math.min(100,gasto/adiant*100)}%;height:6px;border-radius:4px;transition:width .3s"></div>
-      </div>
-      <div style="font-size:11.5px;color:var(--text2);margin-top:6px">Adiantamento de ${fv(adiant)}</div>
+      <div class="summary-bar" style="height:4px;margin:6px 0 0"><span style="width:${Math.min(100,gasto/adiant*100)}%;background:${cor}"></span></div>
     </div>`;
   }
-  return `<div class="card" style="padding:14px 16px">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px">
-        <span class="summary-label">${titulo}</span>
-        <span style="font-size:12px;color:var(--text2)">${desp.length} ${desp.length===1?'despesa':'despesas'}</span>
+  // Cartão compacto: título e total na mesma linha, uma barra única por categoria e a legenda embaixo.
+  return `<div class="card" style="padding:11px 14px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px">
+        <span><span class="summary-label">${titulo}</span> <span style="font-size:11.5px;color:var(--text2)">· ${desp.length} ${desp.length===1?'despesa':'despesas'}</span></span>
+        ${desp.length?`<span style="font-size:19px;font-weight:700;white-space:nowrap">${fv(total)}</span>`:''}
       </div>
-      ${linha('Transporte','i-car',transp,'var(--blue)')}
-      ${linha('Alimentação','i-fork',alim,'var(--green)')}
-      ${linha('Outros','i-plus',outro,'var(--amber)')}
-      ${desp.length?`<div style="border-top:.5px solid var(--border);padding-top:10px;margin-top:2px;display:flex;justify-content:space-between;align-items:baseline">
-        <span style="font-size:13px;color:var(--text2)">${totalRotulo}</span>
-        <span style="font-size:20px;font-weight:700">${fv(total)}</span>
-      </div>`:''}
+      ${desp.length?`<div class="summary-bar" style="height:6px;margin:8px 0 7px">${barra}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:3px 14px;font-size:12px;color:var(--text2)">${legenda}</div>`:''}
       ${saldo}
     </div>`;
 }

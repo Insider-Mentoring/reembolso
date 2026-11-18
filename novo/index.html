@@ -4392,14 +4392,13 @@ const TOUR_STEPS = [
     desc: 'Em 1 minuto você vê o caminho completo: do cadastro do evento até o reembolso cair na conta. O tour vai passando pelas abas da barra de baixo — sempre que mudar de aba, ela é destacada antes.',
     dica: 'Use ← Voltar pra rever um passo, ou toque nas bolinhas abaixo pra pular direto.',
     // Pra quem já viu uma versão anterior (ver TOUR_VERSAO).
-    descNovidades: 'O app ganhou novidades! Os passos que mudaram estão marcados com NOVO — use as bolinhas abaixo pra ir direto neles, ou veja tudo de novo.',
-    dicaNovidades: 'Novidades: adiantamento de alimentação com saldo no evento, nota dividida pra conta em grupo, novo jeito de digitar o valor e um botão pra relatar problemas.'
+    descNovidades: 'O app ganhou visual novo e várias melhorias! Os passos que mudaram estão marcados com NOVO — use as bolinhas abaixo pra ir direto neles, ou veja tudo de novo.',
+    dicaNovidades: 'Novidades: visual novo (claro e escuro), seletor de evento em todas as telas, arrastar pra reordenar e duplicar despesa, conferência da nota antes de baixar, envio ao financeiro com a nota anexada e o menu da engrenagem (dados, tour, suporte e sair).'
   },
   {
     title: '📅 Crie o evento',
     desc: 'Tudo começa pelo evento. Toque em "Novo" e informe nome, cidade, a empresa que vai reembolsar e as datas.',
     dica: 'Use as datas de deslocamento: do dia da ida até o dia da volta — não só os dias do evento. Recebeu adiantamento da empresa? Informe o valor no evento e o app mostra quanto ainda resta da alimentação.',
-    novo: true,
     tab: 'eventos', alvo: ['#screen-eventos .btn-primary']
   },
   {
@@ -4407,6 +4406,12 @@ const TOUR_STEPS = [
     desc: 'Depois de criado, o evento aparece aqui. O que está destacado é o ativo: toda despesa que você lançar vai pra ele. Pra trocar, é só tocar em outro card.',
     dicaDemo: 'Esse card é só um exemplo — o seu evento aparece aqui assim que você criar.',
     tab: 'eventos', alvo: ['#eventos-list .ev-card'], opcional: true
+  },
+  {
+    title: '🔄 Troque de evento em qualquer tela',
+    desc: 'Lançar, Despesas e Gerar têm o mesmo seletor de evento no topo. Toque nele pra escolher outro evento ativo, sem precisar voltar à aba Eventos. A troca vale pras três telas.',
+    novo: true,
+    tab: 'lancar', alvo: ['#evento-ativo-info .ev-sel']
   },
   {
     title: '🧾 Tipo de despesa',
@@ -4417,20 +4422,19 @@ const TOUR_STEPS = [
     title: '📆 Data e valor',
     desc: 'Informe a data do gasto e, logo abaixo, o valor. O app descobre sozinho se foi no Dia 1, Dia 2... do evento.',
     dica: 'O valor entra pelos centavos, como na maquininha: digite 5, 0, 0, 0 pra R$ 50,00.',
-    novo: true,
     tab: 'lancar', alvo: ['#data']
   },
   {
     title: '🧾 Conta dividida no grupo',
     desc: 'Foram em grupo e o lugar deu uma nota só, com o valor cheio? Marque "Nota dividida", informe o total da nota e quantas pessoas — o app calcula a sua parte e coloca no valor.',
     dica: 'No PDF sai a observação "Nota de R$ 800,00 dividida entre 10 pessoas", pro financeiro entender por que o comprovante é maior que o valor pedido.',
-    novo: true,
     tab: 'lancar', alvo: ['#screen-lancar .div-toggle']
   },
   {
     title: '📎 Comprovantes',
     desc: 'Tire a foto do cupom com 📷 Câmera ou escolha um 📄 Arquivo (foto da galeria ou PDF). Dá pra anexar vários na mesma despesa.',
-    dica: 'Uber/99: anexe o PDF com o trajeto completo. Prints de tela do banco não são aceitos.',
+    dica: 'Uber/99: anexe o PDF com o trajeto completo. Prints de tela do banco não são aceitos. Atenção: a nota só é gerada quando todas as despesas do evento têm comprovante anexado.',
+    novo: true,
     tab: 'lancar', alvo: ['#comprovante-btns']
   },
   {
@@ -4441,18 +4445,22 @@ const TOUR_STEPS = [
   },
   {
     title: '📋 Confira as despesas',
-    desc: 'Aqui fica tudo que você lançou no evento, com o total por categoria. Novas despesas entram por data; segure e arraste um cartão pra organizar do seu jeito (ou 📅 Ordenar por data) e toque no cartão pra editar (o ⋯ duplica ou exclui).',
+    desc: 'Aqui fica tudo que você lançou no evento, com o resumo no topo (total, categorias e saldo do adiantamento). Toque no cartão pra editar; no ⋯ você duplica (leva junto o comprovante, ótimo pro trajeto que se repete) ou exclui. Segure e arraste um cartão pra mudar a ordem, ou use 📅 Ordenar por data.',
+    novo: true,
     dicaDemo: 'Essas despesas são só exemplos — as suas aparecem aqui conforme você lança.',
     tab: 'despesas', alvo: ['#despesas-list .exp-item', '#tab-despesas']
   },
   {
     title: '📥 Gere o PDF',
-    desc: 'Confira os dados da nota e gere o PDF: a nota de débito + todos os comprovantes num arquivo só.',
+    desc: 'Confira os dados da nota e toque em Gerar: antes de baixar, o app mostra a nota e os comprovantes pra você conferir. Gerar de novo no mesmo evento atualiza a mesma nota, com o mesmo número.',
+    dica: 'Se faltar comprovante em alguma despesa, o botão fica bloqueado e o app mostra quais faltam.',
+    novo: true,
     tab: 'gerar', alvo: ['#btn-gerar-pdf']
   },
   {
     title: '📧 Envie ao financeiro',
-    desc: 'Depois de gerar a nota, toque em "Enviar ao financeiro": o app abre seu e-mail com a nota já anexada e o assunto e a mensagem prontos. É só colar o endereço do financeiro no campo Para e enviar!',
+    desc: 'Depois de gerar a nota, toque em "Enviar ao financeiro" e siga o passo a passo. No celular o e-mail abre com a nota já anexada, assunto e mensagem prontos (cole o endereço do financeiro em Para). No computador você escolhe Gmail, Outlook ou o seu programa de e-mail e anexa o PDF da pasta Downloads.',
+    novo: true,
     tab: 'gerar', alvo: ['#btn-enviar-email']
   },
   {
@@ -4468,6 +4476,7 @@ const TOUR_STEPS = [
     desc: 'Na engrenagem do topo ficam seus dados pessoais e bancários (que saem impressos na nota), o tour, o guia rápido, o suporte e o Sair. Se ainda não instalou o app, é por aqui também: "Instalar app" coloca o ícone da IGD na tela inicial.',
     descInstalado: 'Na engrenagem do topo ficam seus dados pessoais e bancários (que saem impressos na nota), o tour, o guia rápido, o suporte e o Sair.',
     dica: 'Capriche nos dados bancários: é pra essa conta que o reembolso vai. Algo não funcionou? Em "Relatar problema ou sugerir melhoria" as informações técnicas vão juntas e ajudam a resolver rápido.',
+    novo: true,
     alvo: ['#btn-cfg']
   },
   {
@@ -4486,7 +4495,7 @@ const TOUR_STEPS = [
 // texto de novidades) e os passos marcados com `novo: true` ganham a etiqueta
 // NOVO. Antes o app guardava só "já viu" ('1'), então quem já tinha visto nunca
 // mais era avisado de nada.
-const TOUR_VERSAO = '3';
+const TOUR_VERSAO = '4';
 let tourMostrarNovos = false;
 let tourStep = 0;
 let tourDirecao = 1;          // 1 = avançando, -1 = voltando (pra pular passo opcional no sentido certo)
@@ -4595,7 +4604,7 @@ function mostrarBannerTutorial(){
     <span style="font-size:24px">${jaViu ? '🎉' : '👋'}</span>
     <div style="flex:1">
       <div style="font-weight:600;margin-bottom:2px">${jaViu ? 'Novidades no app!' : 'Primeira vez aqui?'}</div>
-      <div style="font-size:12px;opacity:.85">${jaViu ? 'Nota dividida, valor mais fácil e mais' : 'Veja como usar o app em 1 minuto'}</div>
+      <div style="font-size:12px;opacity:.85">${jaViu ? 'Visual novo, conferir a nota e mais' : 'Veja como usar o app em 1 minuto'}</div>
     </div>
     <button onclick="document.getElementById('banner-tutorial').remove();iniciarTour()"
       style="background:#fff;color:#000;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap">

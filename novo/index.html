@@ -156,11 +156,6 @@ textarea{resize:vertical;min-height:68px}
 .exp-actions button.tag-btn{width:auto;height:28px;padding:0 10px;gap:5px;font-size:12px}
 .exp-actions button:disabled{opacity:.25;cursor:default}
 .exp-actions .spacer{flex:1}
-.exp-actions .stepper{display:flex;flex-direction:column;width:28px;height:28px;border-radius:8px;border:.5px solid transparent;background:var(--bg3);overflow:hidden;flex-shrink:0}
-.exp-actions .stepper button{width:28px;height:14px;border-radius:0;border:none;background:transparent;color:var(--text2);display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer}
-.exp-actions .stepper button:first-child{border-bottom:.5px solid var(--border2)}
-.exp-actions .stepper button:disabled{opacity:.25;cursor:default}
-.exp-actions .stepper .icon{width:10px;height:10px}
 @keyframes nd-flash{0%{background:var(--bg3)}100%{background:transparent}}
 /* Ações do cartão de despesa: alvos de toque maiores sem pesar o visual. Os botões seguem
    tonais e sem contorno; subir/descer vira uma pílula única com duas metades lado a lado. */
@@ -172,12 +167,11 @@ textarea{resize:vertical;min-height:68px}
 .exp-item .exp-actions button.tag-btn{width:auto;height:32px;padding:0 11px}
 .exp-item .exp-actions button.tag-btn .icon{width:13px;height:13px}
 .exp-item .exp-actions button::after{content:'';position:absolute;inset:-4px}
-.exp-item .exp-actions .stepper{flex-direction:row;width:auto;height:36px;border-radius:10px}
-.exp-item .exp-actions .stepper button{width:42px;height:36px;border-radius:0}
-.exp-item .exp-actions .stepper button::after{inset:-4px 0}
-.exp-item .exp-actions .stepper button:first-child{border-bottom:none;border-right:.5px solid var(--border2)}
-.exp-item .exp-actions .stepper .icon{width:15px;height:15px}
 .exp-item.flash{animation:nd-flash .7s ease-out}
+.exp-item{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.exp-item.arrastando{position:relative;z-index:25;box-shadow:0 14px 32px rgba(0,0,0,.3);border-color:var(--accent);cursor:grabbing}
+body.arrastando-despesa{cursor:grabbing}
+body.arrastando-despesa .exp-item:not(.arrastando){opacity:.92}
 
 /* ── resumo no topo da lista de despesas ─────────────────────── */
 .event-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;background:var(--bg2);border-radius:20px;font-size:12.5px;color:var(--text2);max-width:100%}
@@ -511,7 +505,7 @@ button.event-chip{border:none;font-family:inherit;text-align:left;cursor:pointer
   <div id="screen-despesas" class="screen">
     <h2 class="sr-only">Despesas</h2>
     <div id="total-area"></div>
-    <div id="ordem-bar" style="text-align:right"></div>
+    <div id="ordem-bar" style="display:flex;justify-content:space-between;align-items:center;gap:10px"></div>
     <div id="despesas-list"></div>
   </div>
 
@@ -2787,11 +2781,167 @@ function reordenarPorData(){
   mostrarToast('📅 Ordenadas por data','ok');
 }
 
+
+// ─── Arrastar para reordenar (aba Despesas) ───────────────────
+// Segurar o cartão por ~0,35 s e arrastar para cima/baixo, como num quadro Kanban.
+// Antes de segurar, o dedo continua rolando a página normalmente.
+let arrasto=null, arrastoIniciado=false;
+const ARRASTO_ESPERA=350;
+
+function iniciarArrastoDespesas(){
+  if(arrastoIniciado)return;
+  const lista=document.getElementById('despesas-list');
+  if(!lista)return;
+  arrastoIniciado=true;
+  lista.addEventListener('pointerdown',arrastoPressionou);
+  // O menu "segurar" do Android e a rolagem não podem disputar o gesto depois que o arrasto começa.
+  lista.addEventListener('contextmenu',e=>{if(arrasto)e.preventDefault()});
+  document.addEventListener('touchmove',e=>{if(arrasto&&arrasto.ativo)e.preventDefault()},{passive:false});
+  // Alt + seta do teclado continua reordenando (acessibilidade).
+  lista.addEventListener('keydown',e=>{
+    const card=e.target.closest&&e.target.closest('.exp-item');
+    if(!card||!e.altKey||(e.key!=='ArrowUp'&&e.key!=='ArrowDown'))return;
+    e.preventDefault();
+    moverDespesa(Number(card.dataset.id),e.key==='ArrowUp'?-1:1);
+    document.querySelector(`.exp-item[data-id="${card.dataset.id}"]`)?.focus();
+  });
+}
+
+function arrastoPressionou(e){
+  if(arrasto)return;
+  if(e.pointerType==='mouse'&&e.button!==0)return;
+  const card=e.target.closest('.exp-item');
+  if(!card||e.target.closest('button,a,input,select,textarea'))return;
+  const lista=card.parentElement;
+  if(lista.querySelectorAll('.exp-item').length<2)return;
+  const st={card,lista,pointerId:e.pointerId,x0:e.clientX,y0:e.clientY,ultimoY:e.clientY,ativo:false,
+    ordemInicial:[...lista.querySelectorAll('.exp-item')].map(c=>c.dataset.id),renderPendente:false};
+  st.timer=setTimeout(()=>arrastoAtivar(st),ARRASTO_ESPERA);
+  arrasto=st;
+  document.addEventListener('pointermove',arrastoMoveu);
+  document.addEventListener('pointerup',arrastoSoltou);
+  document.addEventListener('pointercancel',arrastoCancelou);
+}
+function arrastoLimpar(){
+  document.removeEventListener('pointermove',arrastoMoveu);
+  document.removeEventListener('pointerup',arrastoSoltou);
+  document.removeEventListener('pointercancel',arrastoCancelou);
+  if(arrasto){clearTimeout(arrasto.timer);cancelAnimationFrame(arrasto.raf)}
+}
+function arrastoAtivar(st){
+  if(arrasto!==st)return;
+  st.ativo=true;
+  st.startPageY=st.ultimoY+window.scrollY;
+  st.card.classList.add('arrastando');
+  document.body.classList.add('arrastando-despesa');
+  try{st.card.setPointerCapture(st.pointerId)}catch(_){}
+  if(navigator.vibrate)navigator.vibrate(15);
+  arrastoMover(st,st.ultimoY);
+  arrastoRolar(st);
+}
+function arrastoMoveu(e){
+  const st=arrasto;
+  if(!st||e.pointerId!==st.pointerId)return;
+  st.ultimoY=e.clientY;
+  if(!st.ativo){
+    // Mexeu antes de segurar o tempo todo: é rolagem, não arrasto.
+    if(Math.hypot(e.clientX-st.x0,e.clientY-st.y0)>8){arrastoLimpar();arrasto=null}
+    return;
+  }
+  e.preventDefault();
+  arrastoMover(st,e.clientY);
+}
+function arrastoMover(st,clientY){
+  const {card,lista}=st;
+  const dy=(clientY+window.scrollY)-st.startPageY;
+  card.style.transform=`translateY(${dy}px) scale(1.02)`;
+  const centro=()=>{const r=card.getBoundingClientRect();return r.top+r.height/2};
+  const meio=el=>{const r=el.getBoundingClientRect();return r.top+r.height/2};
+  for(let guarda=0;guarda<6;guarda++){
+    const prox=card.nextElementSibling,ant=card.previousElementSibling;
+    if(prox&&prox.classList.contains('exp-item')&&centro()>meio(prox)) arrastoTrocar(st,prox,'depois',clientY);
+    else if(ant&&ant.classList.contains('exp-item')&&centro()<meio(ant)) arrastoTrocar(st,ant,'antes',clientY);
+    else break;
+  }
+}
+function arrastoTrocar(st,viz,pos,clientY){
+  const {card,lista}=st;
+  const vizAntes=viz.getBoundingClientRect().top;
+  card.style.transform='none';
+  const naturalAntes=card.getBoundingClientRect().top;
+  if(pos==='depois')lista.insertBefore(viz,card); else lista.insertBefore(card,viz);
+  const naturalDepois=card.getBoundingClientRect().top;
+  st.startPageY+=naturalDepois-naturalAntes;
+  card.style.transform=`translateY(${(clientY+window.scrollY)-st.startPageY}px) scale(1.02)`;
+  // O cartão vizinho desliza para o lugar novo em vez de pular.
+  const vizDepois=viz.getBoundingClientRect().top;
+  viz.style.transition='none';
+  viz.style.transform=`translateY(${vizAntes-vizDepois}px)`;
+  void viz.offsetWidth;
+  viz.style.transition='transform .18s ease';
+  viz.style.transform='';
+  setTimeout(()=>{viz.style.transition=''},200);
+}
+// Rola a página sozinha quando o cartão chega perto do topo ou da barra de abas.
+function arrastoRolar(st){
+  if(arrasto!==st||!st.ativo)return;
+  const topo=document.querySelector('.hdr').getBoundingClientRect().bottom;
+  const base=document.querySelector('.nav').getBoundingClientRect().top;
+  const zona=90,y=st.ultimoY;
+  let v=0;
+  if(y<topo+zona)v=-Math.ceil(Math.min(1,(topo+zona-y)/zona)*14);
+  else if(y>base-zona)v=Math.ceil(Math.min(1,(y-(base-zona))/zona)*14);
+  if(v){window.scrollBy(0,v);arrastoMover(st,y)}
+  st.raf=requestAnimationFrame(()=>arrastoRolar(st));
+}
+function arrastoSoltou(e){
+  const st=arrasto;
+  if(!st||e.pointerId!==st.pointerId)return;
+  arrastoFinalizar(st,false);
+}
+function arrastoCancelou(e){
+  const st=arrasto;
+  if(!st||e.pointerId!==st.pointerId)return;
+  arrastoFinalizar(st,true);
+}
+function arrastoFinalizar(st,cancelar){
+  arrastoLimpar();
+  if(!st.ativo){arrasto=null;return}
+  const {card,lista}=st;
+  const ids=[...lista.querySelectorAll('.exp-item')].map(c=>c.dataset.id);
+  const mudou=ids.join(',')!==st.ordemInicial.join(',');
+  // O cartão assenta no lugar com uma pequena animação antes de a lista ser refeita.
+  const visual=card.getBoundingClientRect().top;
+  card.style.transition='none';card.style.transform='none';
+  const natural=card.getBoundingClientRect().top;
+  card.style.transform=`translateY(${visual-natural}px) scale(1.02)`;
+  void card.offsetWidth;
+  card.style.transition='transform .16s ease';
+  card.style.transform='';
+  setTimeout(()=>{
+    card.classList.remove('arrastando');card.style.transition='';
+    document.body.classList.remove('arrastando-despesa');
+    arrasto=null;
+    if(mudou&&!cancelar){aplicarNovaOrdemDespesas(ids);}
+    else renderDespesas();
+  },170);
+}
+function aplicarNovaOrdemDespesas(idsTexto){
+  const mapa=new Map(S.despesas.map(d=>[String(d.id),d]));
+  const posicoes=[];
+  S.despesas.forEach((d,i)=>{if(idsTexto.includes(String(d.id)))posicoes.push(i)});
+  posicoes.forEach((gi,k)=>{S.despesas[gi]=mapa.get(idsTexto[k])});
+  salvar();renderDespesas();
+}
+
 function seletorEventoDespesasHtml(ev){
   return '<div class="slabel" style="margin-top:0">Evento</div><div style="margin-bottom:12px">'+chipEventoHtml(ev,'despesas')+'</div>';
 }
 
 function renderDespesas(){
+  // Durante um arrasto, o desenho da lista espera: refazer agora destruiria o cartão que está sendo movido.
+  if(arrasto&&arrasto.ativo){arrasto.renderPendente=true;return}
+  iniciarArrastoDespesas();
   const el=document.getElementById('despesas-list');
   const ta=document.getElementById('total-area');
   const desp=S.eventoAtivo?S.despesas.filter(d=>d.eventoId===S.eventoAtivo):S.despesas;
@@ -2803,9 +2953,9 @@ function renderDespesas(){
     return;
   }
   ta.innerHTML=seletorEventoDespesasHtml(ev)+resumoEventoHtml(desp,ev,{adiantamento:true});
-  document.getElementById('ordem-bar').innerHTML=desp.length>1?'<button type="button" onclick="reordenarPorData()" style="background:none;border:none;color:var(--text2);font:inherit;font-size:13px;padding:4px 2px 8px;cursor:pointer">📅 Ordenar por data</button>':'';
+  document.getElementById('ordem-bar').innerHTML=desp.length>1?'<span style="font-size:12px;color:var(--text2)">Segure e arraste para reordenar</span><button type="button" onclick="reordenarPorData()" style="background:none;border:none;color:var(--text2);font:inherit;font-size:13px;padding:4px 2px 8px;cursor:pointer;white-space:nowrap">📅 Ordenar por data</button>':'';
   el.innerHTML=desp.map((d,idx)=>`
-    <div class="exp-item${d.tipo!=='transporte'?' tipo-alimentacao':''}" data-id="${d.id}">
+    <div class="exp-item${d.tipo!=='transporte'?' tipo-alimentacao':''}" data-id="${d.id}" tabindex="0">
       <div class="exp-stripe"></div>
       <div class="exp-body">
         <div class="exp-row">
@@ -2833,10 +2983,6 @@ function renderDespesas(){
           <div class="exp-ctrl">
             <button onclick="editarDespesa(${d.id})" title="Editar" aria-label="Editar"><svg class="icon"><use href="#i-pencil"/></svg></button>
             <button class="danger" onclick="delDespesa(${d.id})" title="Excluir" aria-label="Excluir"><svg class="icon"><use href="#i-trash"/></svg></button>
-            <div class="stepper">
-              <button onclick="moverDespesa(${d.id},-1)" ${idx===0?'disabled':''} title="Mover para cima" aria-label="Mover para cima"><svg class="icon"><use href="#i-chevron"/></svg></button>
-              <button onclick="moverDespesa(${d.id},1)" ${idx===desp.length-1?'disabled':''} title="Mover para baixo" aria-label="Mover para baixo"><svg class="icon" style="transform:rotate(180deg)"><use href="#i-chevron"/></svg></button>
-            </div>
           </div>
         </div>
       </div>
@@ -4153,7 +4299,7 @@ const TOUR_STEPS = [
   },
   {
     title: '📋 Confira as despesas',
-    desc: 'Aqui fica tudo que você lançou no evento, com o total por categoria. Novas despesas entram por data; use as setas pra organizar do seu jeito (ou 📅 Ordenar por data) e toque no ✏️ pra editar.',
+    desc: 'Aqui fica tudo que você lançou no evento, com o total por categoria. Novas despesas entram por data; segure e arraste um cartão pra organizar do seu jeito (ou 📅 Ordenar por data) e toque no ✏️ pra editar.',
     dicaDemo: 'Essas despesas são só exemplos — as suas aparecem aqui conforme você lança.',
     tab: 'despesas', alvo: ['#despesas-list .exp-item', '#tab-despesas']
   },
@@ -4284,10 +4430,6 @@ function inserirDespesasExemplo(){
           <div class="exp-ctrl">
             <button tabindex="-1" aria-hidden="true"><svg class="icon"><use href="#i-pencil"/></svg></button>
             <button class="danger" tabindex="-1" aria-hidden="true"><svg class="icon"><use href="#i-trash"/></svg></button>
-            <div class="stepper">
-              <button tabindex="-1" aria-hidden="true" ${idx===0?'disabled':''}><svg class="icon"><use href="#i-chevron"/></svg></button>
-              <button tabindex="-1" aria-hidden="true" ${idx===exemplos.length-1?'disabled':''}><svg class="icon" style="transform:rotate(180deg)"><use href="#i-chevron"/></svg></button>
-            </div>
           </div>
         </div>
       </div>
@@ -5081,7 +5223,7 @@ initGoogle();
       </div>
       <div style="margin-bottom:16px">
         <div style="font-weight:600;margin-bottom:4px">📋 Despesas</div>
-        <div style="color:var(--text2);font-size:13px">Confira tudo que lançou. Use as setinhas ▲▼ para reordenar. Toque no ✏️ pra corrigir qualquer dado ou trocar comprovantes.</div>
+        <div style="color:var(--text2);font-size:13px">Confira tudo que lançou. Segure e arraste um cartão para reordenar. Toque no ✏️ pra corrigir qualquer dado ou trocar comprovantes.</div>
       </div>
       <div style="margin-bottom:16px">
         <div style="font-weight:600;margin-bottom:4px">📥 Gerar</div>

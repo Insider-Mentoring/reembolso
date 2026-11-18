@@ -169,6 +169,8 @@ textarea{resize:vertical;min-height:68px}
 .exp-item .exp-actions button::after{content:'';position:absolute;inset:-4px}
 .exp-item.flash{animation:nd-flash .7s ease-out}
 .exp-item{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.exp-item.sem-anexo{border:1.5px solid var(--accent);background:var(--alert-bg)}
+.exp-item .exp-actions button.sem-anexo{width:auto;height:32px;padding:0 11px;background:none;color:var(--alert-fg);border:1px solid var(--accent);font-weight:600;font-size:12px}
 .exp-item.arrastando{position:relative;z-index:25;box-shadow:0 14px 32px rgba(0,0,0,.3);border-color:var(--accent);cursor:grabbing}
 body.arrastando-despesa{cursor:grabbing}
 body.arrastando-despesa .exp-item:not(.arrastando){opacity:.92}
@@ -1633,6 +1635,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')fecharMenuCfg()});
 function go(s){
   document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));
+  if(s!=='despesas')destacarSemAnexo=false;
   document.getElementById('screen-'+s).classList.add('active');
   document.getElementById('tab-'+s)?.classList.add('active');
   window.scrollTo(0,0);
@@ -2953,9 +2956,10 @@ function renderDespesas(){
     return;
   }
   ta.innerHTML=seletorEventoDespesasHtml(ev)+resumoEventoHtml(desp,ev,{adiantamento:true});
-  document.getElementById('ordem-bar').innerHTML=desp.length>1?'<span style="font-size:12px;color:var(--text2)">Segure e arraste para reordenar</span><button type="button" onclick="reordenarPorData()" style="background:none;border:none;color:var(--text2);font:inherit;font-size:13px;padding:4px 2px 8px;cursor:pointer;white-space:nowrap">📅 Ordenar por data</button>':'';
+  const nSem=destacarSemAnexo?desp.filter(semAnexo).length:0;
+  document.getElementById('ordem-bar').innerHTML=desp.length>1?'<span style="font-size:12px;color:'+(nSem?'var(--alert-fg)':'var(--text2)')+'">'+(nSem?'⚠️ '+nSem+' sem comprovante':'Segure e arraste para reordenar')+'</span><button type="button" onclick="reordenarPorData()" style="background:none;border:none;color:var(--text2);font:inherit;font-size:13px;padding:4px 2px 8px;cursor:pointer;white-space:nowrap">📅 Ordenar por data</button>':'';
   el.innerHTML=desp.map((d,idx)=>`
-    <div class="exp-item${d.tipo!=='transporte'?' tipo-alimentacao':''}" data-id="${d.id}" tabindex="0">
+    <div class="exp-item${d.tipo!=='transporte'?' tipo-alimentacao':''}${destacarSemAnexo&&semAnexo(d)?' sem-anexo':''}" data-id="${d.id}" tabindex="0">
       <div class="exp-stripe"></div>
       <div class="exp-body">
         <div class="exp-row">
@@ -2977,6 +2981,7 @@ function renderDespesas(){
         </div>
         <div class="exp-actions" style="margin-top:8px">
           ${d.nfLink?`<button class="tag-btn" data-nflink="${escAttr(d.nfLink)}" onclick="window.open(this.dataset.nflink,'_blank')" title="Ver NF-e"><svg class="icon" style="color:var(--purple)"><use href="#i-link"/></svg>NF-e</button>`:''}
+          ${destacarSemAnexo&&semAnexo(d)?`<button class="tag-btn sem-anexo" onclick="editarDespesa(${d.id})" title="Toque para anexar o comprovante">⚠️ Sem comprovante</button>`:''}
           ${d.attachs&&d.attachs.length?`<button class="tag-btn" onclick="previewDespesaAttach(${d.id},0)" title="Ver comprovante"><svg class="icon"><use href="#i-receipt"/></svg>${d.attachs.length}</button>`:''}
           ${d.divisao&&d.divisao.total?`<span class="tag-div" title="${textoDivisao(d)}">÷ ${d.divisao.pessoas} · nota ${fv(d.divisao.total)}</span>`:''}
           <div class="spacer"></div>
@@ -3050,6 +3055,15 @@ function renderGerar(){
 // Resumo do evento: o mesmo cartão em Despesas e em Gerar. Cabeçalho com a quantidade,
 // uma linha por categoria com barra, o total e (só em Despesas) o saldo do adiantamento,
 // que é um controle pessoal e não vai para a nota.
+// Vindo do aviso de Gerar, a aba Despesas destaca as despesas sem comprovante até a pessoa sair dela.
+let destacarSemAnexo=false;
+const semAnexo=d=>!(d.attachs&&d.attachs.length);
+function verDespesasSemComprovante(){
+  destacarSemAnexo=true;
+  go('despesas');
+  setTimeout(()=>document.querySelector('.exp-item.sem-anexo')?.scrollIntoView({block:'center',behavior:'smooth'}),60);
+}
+
 function resumoEventoHtml(desp,ev,{titulo='Resumo do evento',totalRotulo='Total do evento',adiantamento=false}={}){
   const soma=a=>a.reduce((t,d)=>t+d.valor,0);
   const total=soma(desp);
@@ -3108,8 +3122,8 @@ function renderGerarPreview(){
   if(!desp.length){el.innerHTML='<div class="alert a-warn">Nenhuma despesa neste evento.</div>';return}
   // O resumo fica só na aba Despesas; aqui a conferência da nota já mostra total e quantidade.
   // Só avisa quando há despesa sem comprovante anexado (o link da NF-e sozinho não conta).
-  const sem=desp.filter(d=>!(d.attachs&&d.attachs.length)).length;
-  el.innerHTML=sem?`<div class="alert a-warn" style="margin-bottom:12px">⚠️ ${sem===1?'1 despesa sem comprovante':sem+' despesas sem comprovante'}. <button type="button" onclick="go('despesas')" style="background:none;border:none;padding:0;font:inherit;color:inherit;text-decoration:underline;cursor:pointer">Ver em Despesas</button></div>`:'';
+  const sem=desp.filter(semAnexo).length;
+  el.innerHTML=sem?`<div class="alert a-warn" style="margin-bottom:12px">⚠️ ${sem===1?'1 despesa sem comprovante':sem+' despesas sem comprovante'}. <button type="button" onclick="verDespesasSemComprovante()" style="background:none;border:none;padding:0;font:inherit;color:inherit;text-decoration:underline;cursor:pointer">Ver em Despesas</button></div>`:'';
 }
 
 // ─── GERAR PDF ────────────────────────────────────────────────

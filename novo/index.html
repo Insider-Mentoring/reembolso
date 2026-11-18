@@ -221,6 +221,9 @@ button.event-chip{border:none;font-family:inherit;text-align:left;cursor:pointer
 .passo{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;border:1.5px solid currentColor;font-size:12px;font-weight:700;line-height:1;flex-shrink:0}
 .btn .sub{display:block;font-size:11.5px;font-weight:400;opacity:.8}
 .btn:disabled{opacity:.45;cursor:not-allowed}
+.envio-passos{margin:0;padding-left:22px;font-size:14px;line-height:1.55;color:var(--text);display:flex;flex-direction:column;gap:8px}
+.envio-email{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px;padding:10px 12px;background:var(--bg3);border-radius:var(--radius-sm);font-size:13px;word-break:break-all}
+.envio-email button{flex-shrink:0;background:none;border:1px solid var(--border2);border-radius:8px;padding:6px 12px;font:inherit;font-size:12.5px;font-weight:600;color:var(--text);cursor:pointer}
 .gerar-dica{font-size:12px;color:var(--text2);text-align:center;margin-top:8px;line-height:1.5}
 .gerar-dica b{color:var(--text);font-weight:600;word-break:break-all}
 .nota-acoes{position:sticky;bottom:0;display:flex;flex-direction:column;gap:8px;background:var(--bg2);padding:12px 0 calc(16px + env(safe-area-inset-bottom,0px));margin-top:4px;border-top:.5px solid var(--border)}
@@ -3057,10 +3060,10 @@ function renderGerarAcoes(){
         <span style="display:inline-flex;align-items:center;gap:8px">${passo('✓')} Nota nº ${n.num} gerada</span>
         <span class="sub">${quandoNota(n.em)} · toque para gerar outra</span>
       </button>
-      <button class="btn btn-primary mt8" id="btn-enviar-email" onclick="enviarEmail()">${passo('2')} Enviar ao financeiro</button>
-      <div class="gerar-dica">Anexe <b>${n.arquivo}</b> (está nos Downloads e no Drive do evento).</div>`
+      <button class="btn btn-primary mt8" id="btn-enviar-email" onclick="enviarAoFinanceiro()">${passo('2')} Enviar ao financeiro</button>
+      <div class="gerar-dica">O e-mail sai com a nota já anexada.</div>`
     :`<button class="btn btn-primary mt8" id="btn-gerar-pdf" onclick="gerarPDFUnificado()"${bloq}>${passo('1')} Gerar Nota de Débito (PDF)</button>
-      <button class="btn mt8" id="btn-enviar-email" onclick="enviarEmail()">${passo('2')} Enviar ao financeiro</button>
+      <button class="btn mt8" id="btn-enviar-email" onclick="enviarAoFinanceiro()">${passo('2')} Enviar ao financeiro</button>
       <div class="gerar-dica">${bloqueada?'Anexe os comprovantes que faltam para liberar a nota.':'Gere a nota primeiro.'}</div>`;
 }
 
@@ -3332,7 +3335,7 @@ async function gerarPDFUnificado(){
 
     // Em vez de baixar direto, abre a conferência: a pessoa vê a nota (e os
     // comprovantes) como vão ser enviados e só então confirma.
-    const nomeArquivo = `Nota_de_Debito_N${num}_${ev.nome.replace(/[^a-zA-Z0-9]/g,'_')}.pdf`;
+    const nomeArquivo = `Nota_de_Debito_N${num}_${ev.nome.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]/g,'_')}.pdf`;
     notaPendente = {blob, nomeArquivo, ev, num, bytes:pdfBytes, qtd:desp.length, total:desp.reduce((t,d)=>t+d.valor,0)};
     await abrirConferenciaNota();
 
@@ -3400,6 +3403,7 @@ async function confirmarNota(){
     // Só agora, com o PDF de fato gerado e baixado, consome o número da nota
     // e guarda no evento qual foi a última nota (o app lembra disso ao reabrir).
     ev.ultimaNota={num:n.num,arquivo:nomeArquivo,em:new Date().toISOString()};
+    notaArquivo={eventoId:ev.id,nome:nomeArquivo,blob};
     S.notaCounter++;
     salvar();
 
@@ -4359,7 +4363,7 @@ const TOUR_STEPS = [
   },
   {
     title: '📧 Envie ao financeiro',
-    desc: 'O app abre seu e-mail já com destinatário, assunto e mensagem prontos. Só anexar o PDF e enviar!',
+    desc: 'Depois de gerar a nota, toque em "Enviar ao financeiro": o app abre seu e-mail com a nota já anexada e o assunto e a mensagem prontos. É só colar o endereço do financeiro no campo Para e enviar!',
     tab: 'gerar', alvo: ['#btn-enviar-email']
   },
   {
@@ -4751,15 +4755,10 @@ function abrirAjuda(){
 }
 
 // ─── ENVIAR E-MAIL ────────────────────────────────────────────
-function enviarEmail(){
-  if(!gerarEventoId){alert('Selecione um evento.');return}
-  const ev=S.eventos.find(e=>e.id===gerarEventoId);
-  if(!ev){alert('Evento não encontrado.');return}
-  const desp=S.despesas.filter(d=>d.eventoId===gerarEventoId);
-  if(!desp.length){alert('Nenhuma despesa neste evento.');return}
-
+// Monta o e-mail para o financeiro com os dados da última nota gerada do evento.
+function montarEmailFinanceiro(ev,desp){
   const p=S.prestador||{};
-  const num=(document.getElementById('num-nota').value||padNum(S.notaCounter)).padStart(4,'0');
+  const num=(ev.ultimaNota&&ev.ultimaNota.num)||(document.getElementById('num-nota').value||padNum(S.notaCounter)).padStart(4,'0');
   const total=desp.reduce((s,d)=>s+d.valor,0);
   const nomeEvento=ev.nome+(ev.cidade?' | '+ev.cidade:'');
   const emailFinanceiro=p.emailEnvio||document.getElementById('cfg-email-envio')?.textContent||'financeiro@platmentorias.com.br';
@@ -4796,9 +4795,92 @@ ${p.nome||ME.nome}
 ✉️ ${p.email||ME.email}
 📞 ${p.tel||ME.tel}`;
 
-  const mailto=`mailto:${emailFinanceiro}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`;
-  window.location.href=mailto;
+  return {para:emailFinanceiro,assunto,corpo};
 }
+function abrirMailto(m){
+  window.location.href=`mailto:${m.para}?subject=${encodeURIComponent(m.assunto)}&body=${encodeURIComponent(m.corpo)}`;
+}
+
+// ─── Enviar ao financeiro (passo 2 de Gerar) ──────────────────
+// Com o menu de compartilhar do celular o PDF já vai ANEXADO no e-mail (se a pessoa esquecer o
+// destinatário, o Gmail não deixa enviar; se esquecesse o anexo, o e-mail sairia sem a nota).
+// O menu não preenche o "Para", então o endereço do financeiro é copiado antes.
+// Sem o menu (ou sem o arquivo), cai no e-mail pré-preenchido de antes, pedindo para anexar o PDF.
+let notaArquivo=null;        // {eventoId, nome, blob}: nota recém-gerada, ainda na memória
+let envioPreparo=null;       // {email, file}
+async function arquivoDaNota(ev){
+  const n=ev.ultimaNota;
+  if(!n)return null;
+  if(notaArquivo&&notaArquivo.eventoId===ev.id&&notaArquivo.nome===n.arquivo)return new File([notaArquivo.blob],n.arquivo,{type:'application/pdf'});
+  // Reabriu o app depois de gerar: busca a nota no Drive do evento.
+  if(!accessToken||!rootFolderId)return null;
+  try{
+    const fid=await getEventoFolderId(ev.id);
+    if(!fid)return null;
+    const q=`name='${escDriveQ(n.arquivo)}' and trashed=false and '${fid}' in parents`;
+    const r=await driveReq('GET',`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`);
+    if(!r.files||!r.files.length)return null;
+    const res=await fetch(`https://www.googleapis.com/drive/v3/files/${r.files[0].id}?alt=media`,{headers:{'Authorization':'Bearer '+accessToken}});
+    if(!res.ok)return null;
+    return new File([await res.blob()],n.arquivo,{type:'application/pdf'});
+  }catch(e){console.warn('Não consegui buscar a nota no Drive:',e);return null}
+}
+async function enviarAoFinanceiro(){
+  if(!gerarEventoId){alert('Selecione um evento.');return}
+  const ev=S.eventos.find(e=>e.id===gerarEventoId);
+  if(!ev){alert('Evento não encontrado.');return}
+  if(!ev.ultimaNota){mostrarToast('Gere a nota primeiro.','err');return}
+  const desp=S.despesas.filter(d=>d.eventoId===gerarEventoId);
+  const email=montarEmailFinanceiro(ev,desp);
+  envioPreparo={email,file:null,pronto:false};
+  const corpo=document.getElementById('envio-corpo');
+  document.getElementById('envio-resumo').textContent=`Nota nº ${ev.ultimaNota.num} · ${ev.ultimaNota.arquivo}`;
+  corpo.innerHTML='<div style="padding:24px 0;color:var(--text2)">⏳ Preparando a nota...</div>';
+  document.getElementById('btn-envio-abrir').disabled=true;
+  if(!document.getElementById('modal-enviar').classList.contains('open'))openModal('modal-enviar');
+  const preparo=envioPreparo;
+  const file=await arquivoDaNota(ev);
+  if(preparo!==envioPreparo)return;
+  preparo.file=file;
+  preparo.compartilha=!!(file&&navigator.canShare&&navigator.canShare({files:[file]}));
+  preparo.pronto=true;
+  const end=`<div class="envio-email"><b>${email.para}</b><button type="button" onclick="copiarEmailFinanceiro()">Copiar</button></div>`;
+  corpo.innerHTML=preparo.compartilha
+    ?`<ol class="envio-passos">
+        <li>Toque em <b>Abrir e-mail</b> e escolha o <b>Gmail</b> (ou o seu e-mail).</li>
+        <li>A nota <b>já vai anexada</b>, com o assunto e o texto prontos.</li>
+        <li>No campo <b>Para</b>, cole o endereço do financeiro. Ele é copiado ao tocar no botão.</li>
+        <li>Toque em enviar.</li>
+      </ol>${end}`
+    :`<ol class="envio-passos">
+        <li>Toque em <b>Abrir e-mail</b>: ele abre já endereçado ao financeiro, com assunto e texto prontos.</li>
+        <li><b>Anexe o PDF</b> <b>${ev.ultimaNota.arquivo}</b> (está nos Downloads e no Drive do evento). O e-mail não leva o arquivo sozinho.</li>
+        <li>Toque em enviar.</li>
+      </ol>`;
+  document.getElementById('btn-envio-abrir').disabled=false;
+}
+async function copiarEmailFinanceiro(){
+  if(!envioPreparo)return;
+  try{await navigator.clipboard.writeText(envioPreparo.email.para);mostrarToast('📋 Endereço copiado','ok')}
+  catch(e){mostrarToast('Não consegui copiar. O endereço está na tela.','err')}
+}
+async function abrirEmailDaNota(){
+  const pr=envioPreparo;
+  if(!pr||!pr.pronto)return;
+  if(pr.compartilha){
+    try{await navigator.clipboard.writeText(pr.email.para)}catch(_){}
+    try{
+      await navigator.share({files:[pr.file],title:pr.email.assunto,text:pr.email.corpo});
+      return;
+    }catch(e){
+      if(e&&e.name==='AbortError')return;   // a pessoa fechou o menu
+      console.warn('Compartilhar falhou, usando e-mail simples:',e);
+    }
+  }
+  abrirMailto(pr.email);
+}
+function fecharEnvio(){envioPreparo=null;closeModal('modal-enviar')}
+
 
 // ─── PWA INSTALL ──────────────────────────────────────────────
 let deferredInstallPrompt = null;
@@ -5256,6 +5338,17 @@ initGoogle();
   </div>
 </div>
 
+<!-- MODAL ENVIAR AO FINANCEIRO -->
+<div class="modal-overlay" id="modal-enviar">
+  <div class="modal">
+    <button class="modal-close" onclick="fecharEnvio()">✕</button>
+    <h2>Enviar ao financeiro</h2>
+    <p id="envio-resumo" style="font-size:13px;color:var(--text2);margin:-4px 0 12px;word-break:break-all"></p>
+    <div id="envio-corpo"></div>
+    <button type="button" class="btn btn-primary mt16" id="btn-envio-abrir" onclick="abrirEmailDaNota()" disabled>📧 Abrir e-mail</button>
+  </div>
+</div>
+
 <!-- MODAL AJUDA -->
 <div class="modal-overlay" id="modal-ajuda">
   <div class="modal">
@@ -5280,7 +5373,7 @@ initGoogle();
       </div>
       <div style="margin-bottom:16px">
         <div style="font-weight:600;margin-bottom:4px">📧 Enviar</div>
-        <div style="color:var(--text2);font-size:13px">Depois de gerar a nota, toque em <b>"Enviar ao financeiro"</b> — abre seu e-mail já preenchido com destinatário, assunto e mensagem padrão. Só anexe o PDF e envie!</div>
+        <div style="color:var(--text2);font-size:13px">Depois de gerar a nota, toque em <b>"Enviar ao financeiro"</b> — abre seu e-mail com a nota já anexada, assunto e mensagem prontos. Cole o endereço do financeiro (o app copia para você) e envie!</div>
       </div>
       <div style="margin-bottom:16px">
         <div style="font-weight:600;margin-bottom:4px">⚙️ Configurações</div>

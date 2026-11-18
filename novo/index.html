@@ -3365,7 +3365,7 @@ async function abrirConferenciaNota(){
   const n=notaPendente;
   if(!n)return;
   const seq=++notaSeq;
-  document.getElementById('nota-resumo').textContent=`Nº ${n.num}${n.atualiza?' (atualiza a nota anterior)':''} · ${n.qtd} ${n.qtd===1?'despesa':'despesas'} · ${fv(n.total)}`;
+  document.getElementById('nota-resumo').textContent=`Nº ${n.num}${n.atualiza?' (atualiza a nota anterior)':(n.ev.ultimaNota?' (nota nova)':'')} · ${n.qtd} ${n.qtd===1?'despesa':'despesas'} · ${fv(n.total)}`;
   const body=document.getElementById('nota-body');
   body.innerHTML='<div style="padding:40px 0;color:var(--text2)">⏳ Preparando a visualização...</div>';
   const conf=document.getElementById('btn-nota-confirmar');
@@ -3414,8 +3414,13 @@ async function confirmarNota(){
     const anterior=ev.ultimaNota;
     ev.ultimaNota={num:n.num,arquivo:nomeArquivo,em:new Date().toISOString(),emissao:n.emissao,ref:n.ref,venc:n.venc};
     notaArquivo={eventoId:ev.id,nome:nomeArquivo,blob};
-    // Atualizar a mesma nota não gasta número novo; só uma nota nova avança o contador.
-    if(!n.atualiza)S.notaCounter++;
+    // Atualizar a mesma nota não mexe na sequência. Nota nova: a sequência passa a seguir o número
+    // do campo (digitou 0007 -> a próxima será 0008), o que também serve para corrigir o contador
+    // depois de muitos testes.
+    if(!n.atualiza){
+      const v=parseInt(n.num,10);
+      S.notaCounter=(Number.isFinite(v)&&v>0)?v:S.notaCounter+1;
+    }
     salvar();
 
     // Salvar no Drive na pasta do evento

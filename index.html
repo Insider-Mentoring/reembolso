@@ -413,8 +413,7 @@ button.event-chip{border:none;font-family:inherit;text-align:left;cursor:pointer
   <div class="cfg-menu" id="cfg-menu" role="menu" hidden>
     <button type="button" role="menuitem" onclick="fecharMenuCfg();go('config')"><svg class="icon"><use href="#i-user"/></svg>Meus dados</button>
     <button type="button" role="menuitem" id="cfg-item-instalar" hidden onclick="fecharMenuCfg();instalarApp()"><svg class="icon"><use href="#i-phone"/></svg>Instalar app</button>
-    <button type="button" role="menuitem" onclick="fecharMenuCfg();iniciarTour()"><svg class="icon"><use href="#i-compass"/></svg>Tour interativo</button>
-    <button type="button" role="menuitem" onclick="fecharMenuCfg();abrirAjuda()"><svg class="icon"><use href="#i-book"/></svg>Guia rápido</button>
+    <button type="button" role="menuitem" onclick="fecharMenuCfg();abrirAjuda()"><svg class="icon"><use href="#i-book"/></svg>Como usar o app</button>
     <button type="button" role="menuitem" onclick="fecharMenuCfg();abrirRelato()"><svg class="icon"><use href="#i-chat"/></svg>Relatar problema ou sugerir melhoria</button>
     <div class="cfg-sep"></div>
     <button type="button" role="menuitem" class="danger" onclick="fecharMenuCfg();fazerLogout()"><svg class="icon"><use href="#i-logout"/></svg>Sair</button>
@@ -4404,7 +4403,7 @@ const TOUR_STEPS = [
     dica: 'Use ← Voltar pra rever um passo, ou toque nas bolinhas abaixo pra pular direto.',
     // Pra quem já viu uma versão anterior (ver TOUR_VERSAO).
     descNovidades: 'O app ganhou visual novo e várias melhorias! Os passos que mudaram estão marcados com NOVO — use as bolinhas abaixo pra ir direto neles, ou veja tudo de novo.',
-    dicaNovidades: 'Novidades: visual novo (claro e escuro), seletor de evento em todas as telas, arrastar pra reordenar e duplicar despesa, conferência da nota antes de baixar, envio ao financeiro com a nota anexada e o menu da engrenagem (dados, tour, suporte e sair).'
+    dicaNovidades: 'Novidades: visual novo (claro e escuro), seletor de evento em todas as telas, arrastar pra reordenar e duplicar despesa, conferência da nota antes de baixar, envio ao financeiro com a nota anexada e o menu da engrenagem (dados, como usar o app, suporte e sair).'
   },
   {
     title: '📅 Crie o evento',
@@ -4484,8 +4483,8 @@ const TOUR_STEPS = [
   },
   {
     title: '⚙️ Configurações',
-    desc: 'Na engrenagem do topo ficam seus dados pessoais e bancários (que saem impressos na nota), o tour, o guia rápido, o suporte e o Sair. Se ainda não instalou o app, é por aqui também: "Instalar app" coloca o ícone da IGD na tela inicial.',
-    descInstalado: 'Na engrenagem do topo ficam seus dados pessoais e bancários (que saem impressos na nota), o tour, o guia rápido, o suporte e o Sair.',
+    desc: 'Na engrenagem do topo ficam seus dados pessoais e bancários (que saem impressos na nota), o "Como usar o app" (este tour e um resumo escrito), o suporte e o Sair. Se ainda não instalou o app, é por aqui também: "Instalar app" coloca o ícone da IGD na tela inicial.',
+    descInstalado: 'Na engrenagem do topo ficam seus dados pessoais e bancários (que saem impressos na nota), o "Como usar o app" (este tour e um resumo escrito), o suporte e o Sair.',
     dica: 'Capriche nos dados bancários: é pra essa conta que o reembolso vai. Algo não funcionou? Em "Relatar problema ou sugerir melhoria" as informações técnicas vão juntas e ajudam a resolver rápido.',
     novo: true,
     alvo: ['#btn-cfg']
@@ -4497,7 +4496,7 @@ const TOUR_STEPS = [
   },
   {
     title: '✅ Pronto!',
-    desc: 'Toque na engrenagem lá em cima a qualquer momento e escolha Tour interativo pra rever este passo a passo. Bons eventos! 🚀'
+    desc: 'Toque na engrenagem lá em cima a qualquer momento e escolha "Como usar o app" pra rever este passo a passo. Bons eventos! 🚀'
   }
 ];
 
@@ -5514,7 +5513,10 @@ initGoogle();
 <div class="modal-overlay" id="modal-ajuda">
   <div class="modal">
     <button class="modal-close" onclick="closeModal('modal-ajuda')">✕</button>
-    <h2>📖 Guia rápido</h2>
+    <h2>📖 Como usar o app</h2>
+    <p style="font-size:13px;color:var(--text2);margin:-4px 0 12px;line-height:1.5">Prefere ser guiado, tela por tela, em cerca de 1 minuto? Faça o tour. Se quiser só consultar, o resumo está logo abaixo.</p>
+    <button class="btn btn-primary" onclick="closeModal('modal-ajuda');iniciarTour()">▶️ Fazer o tour interativo</button>
+    <div style="height:16px"></div>
     <div style="font-size:14px;line-height:1.8">
       <div style="margin-bottom:16px">
         <div style="font-weight:600;margin-bottom:4px">📅 Eventos</div>
@@ -5530,7 +5532,7 @@ initGoogle();
       </div>
       <div style="margin-bottom:16px">
         <div style="font-weight:600;margin-bottom:4px">📥 Gerar</div>
-        <div style="color:var(--text2);font-size:13px">Confira o resumo por categoria e gere o PDF. O arquivo inclui a nota de débito + todos os comprovantes em um único PDF.</div>
+        <div style="color:var(--text2);font-size:13px">Confira os dados da nota e toque em <b>Gerar</b>: o app mostra a nota para você conferir antes de baixar. A nota só é gerada quando todas as despesas têm comprovante anexado. O arquivo inclui a nota de débito + todos os comprovantes num único PDF.</div>
       </div>
       <div style="margin-bottom:16px">
         <div style="font-weight:600;margin-bottom:4px">📧 Enviar</div>
@@ -5538,14 +5540,12 @@ initGoogle();
       </div>
       <div style="margin-bottom:16px">
         <div style="font-weight:600;margin-bottom:4px">⚙️ Configurações</div>
-        <div style="color:var(--text2);font-size:13px">Na engrenagem do topo: <b>Meus dados</b> (pessoais, bancários, tomadores e e-mail de envio), tour, guia rápido, suporte e Sair.</div>
+        <div style="color:var(--text2);font-size:13px">Na engrenagem do topo: <b>Meus dados</b> (pessoais, bancários, tomadores e e-mail de envio), <b>Como usar o app</b>, suporte e Sair.</div>
       </div>
       <div style="background:var(--amber-bg);color:var(--amber);border-radius:8px;padding:10px 12px;font-size:13px">
         ⚠️ <b>Lembre-se:</b> prints de tela do banco não são aceitos. Uber/99 envie o PDF com trajeto completo.
       </div>
     </div>
-    <button class="btn btn-primary mt16" onclick="closeModal('modal-ajuda');iniciarTour()">▶️ Ver tour interativo</button>
-    <button class="btn mt8" onclick="closeModal('modal-ajuda');abrirRelato()">💬 Relatar problema ou sugerir melhoria</button>
   </div>
 </div>
 

@@ -4816,6 +4816,23 @@ function ehCelular(){
 function urlGmail(m){
   return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(m.para)}&su=${encodeURIComponent(m.assunto)}&body=${encodeURIComponent(m.corpo)}`;
 }
+function urlOutlook(m){
+  return `https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(m.para)}&subject=${encodeURIComponent(m.assunto)}&body=${encodeURIComponent(m.corpo)}`;
+}
+// No computador cada pessoa tem o seu e-mail: mostramos as opções e lembramos a última usada neste aparelho.
+const OPCOES_EMAIL={
+  gmail:{rotulo:'📧 Abrir no Gmail'},
+  outlook:{rotulo:'📧 Abrir no Outlook (navegador)'},
+  programa:{rotulo:'💻 Usar o programa de e-mail do computador'}
+};
+function lerPrefEmail(){try{return localStorage.getItem('nd_email_pref')||''}catch(_){return ''}}
+function abrirEmailDesktop(op){
+  const pr=envioPreparo;
+  if(!pr||!pr.pronto||!OPCOES_EMAIL[op])return;
+  try{localStorage.setItem('nd_email_pref',op)}catch(_){}
+  if(op==='programa')abrirMailto(pr.email);
+  else window.open(op==='gmail'?urlGmail(pr.email):urlOutlook(pr.email),'_blank');
+}
 let notaArquivo=null;        // {eventoId, nome, blob}: nota recém-gerada, ainda na memória
 let envioPreparo=null;       // {email, file}
 async function arquivoDaNota(ev){
@@ -4852,20 +4869,19 @@ async function enviarAoFinanceiro(){
   const celular=ehCelular();
   const nome=ev.ultimaNota.arquivo;
   const btnAbrir=document.getElementById('btn-envio-abrir');
-  const btnOutro=document.getElementById('btn-envio-outro');
-  btnOutro.style.display='none';
+  btnAbrir.style.display='';
   if(!celular){
-    // Computador: Gmail no navegador (ou o programa de e-mail), e a pessoa anexa o PDF da pasta Downloads.
+    // Computador: a pessoa escolhe onde abre o e-mail e anexa o PDF da pasta Downloads.
     preparo.modo='desktop';preparo.pronto=true;
-    btnAbrir.textContent='📧 Abrir no Gmail';
-    btnOutro.style.display='';
+    btnAbrir.style.display='none';
+    const pref=lerPrefEmail();
+    const ordem=['gmail','outlook','programa'].sort((x,y)=>(y===pref)-(x===pref));
     corpo.innerHTML=`<ol class="envio-passos">
-        <li>Clique em <b>Abrir no Gmail</b>: abre o rascunho já endereçado ao financeiro, com assunto e texto prontos.</li>
+        <li>Escolha <b>onde você abre seu e-mail</b>: o rascunho abre já endereçado ao financeiro, com assunto e texto prontos.</li>
         <li><b>Anexe o PDF</b> <b>${nome}</b> (está na pasta Downloads e no Drive do evento), pelo clipe 📎 ou arrastando o arquivo para o e-mail. O e-mail não leva o arquivo sozinho.</li>
         <li>Clique em enviar.</li>
       </ol>
-      <div class="envio-email" style="margin-top:12px"><span>Não usa o Gmail no navegador? Use o botão <b>Outro programa de e-mail</b> abaixo.</span></div>`;
-    btnAbrir.disabled=false;
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px">${ordem.map(op=>`<button type="button" class="btn${op===pref?' btn-primary':''}" onclick="abrirEmailDesktop('${op}')">${OPCOES_EMAIL[op].rotulo}</button>`).join('')}</div>`;
     return;
   }
   btnAbrir.textContent='📧 Abrir e-mail';
@@ -4897,7 +4913,6 @@ async function copiarEmailFinanceiro(){
 async function abrirEmailDaNota(){
   const pr=envioPreparo;
   if(!pr||!pr.pronto)return;
-  if(pr.modo==='desktop'){window.open(urlGmail(pr.email),'_blank');return}
   if(pr.modo==='compartilhar'){
     try{await navigator.clipboard.writeText(pr.email.para)}catch(_){}
     try{
@@ -4910,7 +4925,6 @@ async function abrirEmailDaNota(){
   }
   abrirMailto(pr.email);
 }
-function abrirProgramaDeEmail(){if(envioPreparo&&envioPreparo.pronto)abrirMailto(envioPreparo.email)}
 function fecharEnvio(){envioPreparo=null;closeModal('modal-enviar')}
 
 
@@ -5378,7 +5392,6 @@ initGoogle();
     <p id="envio-resumo" style="font-size:13px;color:var(--text2);margin:-4px 0 12px;word-break:break-all"></p>
     <div id="envio-corpo"></div>
     <button type="button" class="btn btn-primary mt16" id="btn-envio-abrir" onclick="abrirEmailDaNota()" disabled>📧 Abrir e-mail</button>
-    <button type="button" class="btn mt8" id="btn-envio-outro" onclick="abrirProgramaDeEmail()" style="display:none">Outro programa de e-mail</button>
   </div>
 </div>
 

@@ -4806,6 +4806,16 @@ function abrirMailto(m){
 // destinatário, o Gmail não deixa enviar; se esquecesse o anexo, o e-mail sairia sem a nota).
 // O menu não preenche o "Para", então o endereço do financeiro é copiado antes.
 // Sem o menu (ou sem o arquivo), cai no e-mail pré-preenchido de antes, pedindo para anexar o PDF.
+// O menu de compartilhar só vale no celular: no computador (Windows, por exemplo) ele não lista o
+// Gmail do navegador. Lá abrimos o rascunho no Gmail web, endereçado, com assunto e texto prontos.
+function ehCelular(){
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+    ||!!(navigator.userAgentData&&navigator.userAgentData.mobile)
+    ||(window.matchMedia('(pointer:coarse)').matches&&window.matchMedia('(hover:none)').matches);
+}
+function urlGmail(m){
+  return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(m.para)}&su=${encodeURIComponent(m.assunto)}&body=${encodeURIComponent(m.corpo)}`;
+}
 let notaArquivo=null;        // {eventoId, nome, blob}: nota recém-gerada, ainda na memória
 let envioPreparo=null;       // {email, file}
 async function arquivoDaNota(ev){
@@ -4832,20 +4842,40 @@ async function enviarAoFinanceiro(){
   if(!ev.ultimaNota){mostrarToast('Gere a nota primeiro.','err');return}
   const desp=S.despesas.filter(d=>d.eventoId===gerarEventoId);
   const email=montarEmailFinanceiro(ev,desp);
-  envioPreparo={email,file:null,pronto:false};
+  envioPreparo={email,file:null,pronto:false,modo:''};
   const corpo=document.getElementById('envio-corpo');
   document.getElementById('envio-resumo').textContent=`Nota nº ${ev.ultimaNota.num} · ${ev.ultimaNota.arquivo}`;
   corpo.innerHTML='<div style="padding:24px 0;color:var(--text2)">⏳ Preparando a nota...</div>';
   document.getElementById('btn-envio-abrir').disabled=true;
   if(!document.getElementById('modal-enviar').classList.contains('open'))openModal('modal-enviar');
   const preparo=envioPreparo;
+  const celular=ehCelular();
+  const nome=ev.ultimaNota.arquivo;
+  const btnAbrir=document.getElementById('btn-envio-abrir');
+  const btnOutro=document.getElementById('btn-envio-outro');
+  btnOutro.style.display='none';
+  if(!celular){
+    // Computador: Gmail no navegador (ou o programa de e-mail), e a pessoa anexa o PDF da pasta Downloads.
+    preparo.modo='desktop';preparo.pronto=true;
+    btnAbrir.textContent='📧 Abrir no Gmail';
+    btnOutro.style.display='';
+    corpo.innerHTML=`<ol class="envio-passos">
+        <li>Clique em <b>Abrir no Gmail</b>: abre o rascunho já endereçado ao financeiro, com assunto e texto prontos.</li>
+        <li><b>Anexe o PDF</b> <b>${nome}</b> (está na pasta Downloads e no Drive do evento), pelo clipe 📎 ou arrastando o arquivo para o e-mail. O e-mail não leva o arquivo sozinho.</li>
+        <li>Clique em enviar.</li>
+      </ol>
+      <div class="envio-email" style="margin-top:12px"><span>Não usa o Gmail no navegador? Use o botão <b>Outro programa de e-mail</b> abaixo.</span></div>`;
+    btnAbrir.disabled=false;
+    return;
+  }
+  btnAbrir.textContent='📧 Abrir e-mail';
   const file=await arquivoDaNota(ev);
   if(preparo!==envioPreparo)return;
   preparo.file=file;
-  preparo.compartilha=!!(file&&navigator.canShare&&navigator.canShare({files:[file]}));
+  preparo.modo=(file&&navigator.canShare&&navigator.canShare({files:[file]}))?'compartilhar':'simples';
   preparo.pronto=true;
   const end=`<div class="envio-email"><b>${email.para}</b><button type="button" onclick="copiarEmailFinanceiro()">Copiar</button></div>`;
-  corpo.innerHTML=preparo.compartilha
+  corpo.innerHTML=preparo.modo==='compartilhar'
     ?`<ol class="envio-passos">
         <li>Toque em <b>Abrir e-mail</b> e escolha o <b>Gmail</b> (ou o seu e-mail).</li>
         <li>A nota <b>já vai anexada</b>, com o assunto e o texto prontos.</li>
@@ -4854,10 +4884,10 @@ async function enviarAoFinanceiro(){
       </ol>${end}`
     :`<ol class="envio-passos">
         <li>Toque em <b>Abrir e-mail</b>: ele abre já endereçado ao financeiro, com assunto e texto prontos.</li>
-        <li><b>Anexe o PDF</b> <b>${ev.ultimaNota.arquivo}</b> (está nos Downloads e no Drive do evento). O e-mail não leva o arquivo sozinho.</li>
+        <li><b>Anexe o PDF</b> <b>${nome}</b> (está nos Downloads e no Drive do evento). O e-mail não leva o arquivo sozinho.</li>
         <li>Toque em enviar.</li>
       </ol>`;
-  document.getElementById('btn-envio-abrir').disabled=false;
+  btnAbrir.disabled=false;
 }
 async function copiarEmailFinanceiro(){
   if(!envioPreparo)return;
@@ -4867,7 +4897,8 @@ async function copiarEmailFinanceiro(){
 async function abrirEmailDaNota(){
   const pr=envioPreparo;
   if(!pr||!pr.pronto)return;
-  if(pr.compartilha){
+  if(pr.modo==='desktop'){window.open(urlGmail(pr.email),'_blank');return}
+  if(pr.modo==='compartilhar'){
     try{await navigator.clipboard.writeText(pr.email.para)}catch(_){}
     try{
       await navigator.share({files:[pr.file],title:pr.email.assunto,text:pr.email.corpo});
@@ -4879,6 +4910,7 @@ async function abrirEmailDaNota(){
   }
   abrirMailto(pr.email);
 }
+function abrirProgramaDeEmail(){if(envioPreparo&&envioPreparo.pronto)abrirMailto(envioPreparo.email)}
 function fecharEnvio(){envioPreparo=null;closeModal('modal-enviar')}
 
 
@@ -5346,6 +5378,7 @@ initGoogle();
     <p id="envio-resumo" style="font-size:13px;color:var(--text2);margin:-4px 0 12px;word-break:break-all"></p>
     <div id="envio-corpo"></div>
     <button type="button" class="btn btn-primary mt16" id="btn-envio-abrir" onclick="abrirEmailDaNota()" disabled>📧 Abrir e-mail</button>
+    <button type="button" class="btn mt8" id="btn-envio-outro" onclick="abrirProgramaDeEmail()" style="display:none">Outro programa de e-mail</button>
   </div>
 </div>
 

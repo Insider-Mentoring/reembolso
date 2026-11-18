@@ -218,6 +218,10 @@ button.event-chip{border:none;font-family:inherit;text-align:left;cursor:pointer
 
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;align-items:flex-end}
 .modal-overlay.open{display:flex}
+.passo{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;border:1.5px solid currentColor;font-size:12px;font-weight:700;line-height:1;flex-shrink:0}
+.btn .sub{display:block;font-size:11.5px;font-weight:400;opacity:.8}
+.gerar-dica{font-size:12px;color:var(--text2);text-align:center;margin-top:8px;line-height:1.5}
+.gerar-dica b{color:var(--text);font-weight:600;word-break:break-all}
 .nota-acoes{position:sticky;bottom:0;display:flex;flex-direction:column;gap:8px;background:var(--bg2);padding:12px 0 calc(16px + env(safe-area-inset-bottom,0px));margin-top:4px;border-top:.5px solid var(--border)}
 .modal{background:var(--bg2);border-radius:20px 20px 0 0;padding:20px 16px 40px;width:100%;max-height:92dvh;overflow-y:auto}
 .modal h2{font-size:17px;font-weight:600;margin-bottom:16px}
@@ -526,11 +530,7 @@ button.event-chip{border:none;font-family:inherit;text-align:left;cursor:pointer
     <label>Vencimento</label>
     <input type="date" id="venc-nota" />
     <div id="gerar-preview" style="margin-top:16px"></div>
-    <button class="btn btn-primary mt8" id="btn-gerar-pdf" onclick="gerarPDFUnificado()"><svg class="icon" style="width:16px;height:16px"><use href="#i-download"/></svg> Gerar Nota de Débito (PDF)</button>
-    <button class="btn mt8" id="btn-enviar-email" onclick="enviarEmail()" style="border-color:var(--border2)">
-      <svg class="icon" style="width:16px;height:16px"><use href="#i-mail"/></svg> Preparar e-mail para o financeiro
-    </button>
-    <div class="alert a-warn" style="margin-top:10px;margin-bottom:0">⚠️ O e-mail não leva o PDF. Anexe a nota gerada antes de enviar.</div>
+    <div id="gerar-acoes"></div>
   </div>
 
   <!-- CONFIG -->
@@ -3032,9 +3032,35 @@ function delDespesa(id){
 }
 
 // ─── GERAR ────────────────────────────────────────────────────
+// Os dois passos de Gerar: o destaque acompanha o que falta fazer.
+// Antes da nota: "1 Gerar" em destaque. Depois: "2 Enviar ao financeiro" em destaque.
+function quandoNota(iso){
+  const d=new Date(iso);
+  if(isNaN(d))return '';
+  return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})+' às '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+}
+function renderGerarAcoes(){
+  const el=document.getElementById('gerar-acoes');
+  if(!el)return;
+  const ev=S.eventos.find(e=>e.id===gerarEventoId);
+  const n=ev&&ev.ultimaNota;
+  const passo=t=>`<span class="passo">${t}</span>`;
+  el.innerHTML=n
+    ?`<button class="btn mt8" id="btn-gerar-pdf" onclick="gerarPDFUnificado()" style="flex-direction:column;gap:2px;padding:10px 13px">
+        <span style="display:inline-flex;align-items:center;gap:8px">${passo('✓')} Nota nº ${n.num} gerada</span>
+        <span class="sub">${quandoNota(n.em)} · toque para gerar outra</span>
+      </button>
+      <button class="btn btn-primary mt8" id="btn-enviar-email" onclick="enviarEmail()">${passo('2')} Enviar ao financeiro</button>
+      <div class="gerar-dica">Anexe <b>${n.arquivo}</b> (está nos Downloads e no Drive do evento).</div>`
+    :`<button class="btn btn-primary mt8" id="btn-gerar-pdf" onclick="gerarPDFUnificado()">${passo('1')} Gerar Nota de Débito (PDF)</button>
+      <button class="btn mt8" id="btn-enviar-email" onclick="enviarEmail()">${passo('2')} Enviar ao financeiro</button>
+      <div class="gerar-dica">Gere a nota primeiro.</div>`;
+}
+
 function renderGerarEvento(){
   const el=document.getElementById('gerar-evento-sel');
   el.innerHTML=chipEventoHtml(S.eventos.find(e=>e.id===gerarEventoId),'gerar');
+  renderGerarAcoes();
 }
 function renderGerar(){
   if(S.eventoAtivo)gerarEventoId=S.eventoAtivo;
@@ -3307,8 +3333,7 @@ async function gerarPDFUnificado(){
     alert('Erro ao gerar PDF: '+e.message+'\n\nTentando abrir versão HTML...');
     gerarPDF(); // fallback
   }finally{
-    btn.textContent='📥 Gerar Nota de Débito (PDF)';
-    btn.disabled=false;
+    renderGerarAcoes();
   }
 }
 
@@ -3346,7 +3371,7 @@ function voltarDaConferencia(){
 }
 
 // Confirmou: baixa o PDF, consome o número da nota e salva no Drive.
-async function confirmarNota(){
+async function confirmarNota(opts={}){
   const n=notaPendente;
   if(!n)return;
   const {blob,nomeArquivo,ev}=n;
@@ -3364,7 +3389,9 @@ async function confirmarNota(){
     a.click();
     URL.revokeObjectURL(url);
 
-    // Só agora, com o PDF de fato gerado e baixado, consome o número da nota.
+    // Só agora, com o PDF de fato gerado e baixado, consome o número da nota
+    // e guarda no evento qual foi a última nota (o app lembra disso ao reabrir).
+    ev.ultimaNota={num:n.num,arquivo:nomeArquivo,em:new Date().toISOString()};
     S.notaCounter++;
     salvar();
 
@@ -3413,12 +3440,18 @@ async function confirmarNota(){
       }
     }
 
+    renderGerarAcoes();
+    // "Baixar e enviar": depois de salvar no Drive, abre o e-mail. Se o navegador já não
+    // considera que foi um toque da pessoa (o Drive demorou), o botão "Enviar ao financeiro" fica em destaque.
+    if(opts.enviar){
+      if(!navigator.userActivation||navigator.userActivation.isActive)enviarEmail();
+      else mostrarToast('✅ Nota salva. Toque em "Enviar ao financeiro".','ok');
+    }
   }catch(e){
     console.error('Erro ao finalizar a nota:',e);
     mostrarToast('⚠️ Erro ao salvar a nota: '+e.message,'err');
   }finally{
-    btn.textContent='📥 Gerar Nota de Débito (PDF)';
-    btn.disabled=false;
+    renderGerarAcoes();
   }
 }
 
@@ -5207,6 +5240,7 @@ initGoogle();
     <div id="nota-body" style="text-align:center"></div>
     <div class="nota-acoes">
       <button type="button" class="btn btn-primary" id="btn-nota-confirmar" onclick="confirmarNota()">✅ Confirmar e baixar</button>
+      <button type="button" class="btn" onclick="confirmarNota({enviar:true})">📧 Baixar e enviar por e-mail</button>
       <button type="button" class="btn" onclick="voltarDaConferencia()">Voltar e ajustar</button>
     </div>
   </div>
@@ -5245,7 +5279,7 @@ initGoogle();
       </div>
       <div style="margin-bottom:16px">
         <div style="font-weight:600;margin-bottom:4px">📧 Enviar</div>
-        <div style="color:var(--text2);font-size:13px">Toque em <b>"Preparar e-mail para o financeiro"</b> — abre seu e-mail já preenchido com destinatário, assunto e mensagem padrão. Só anexe o PDF e envie!</div>
+        <div style="color:var(--text2);font-size:13px">Depois de gerar a nota, toque em <b>"Enviar ao financeiro"</b> — abre seu e-mail já preenchido com destinatário, assunto e mensagem padrão. Só anexe o PDF e envie!</div>
       </div>
       <div style="margin-bottom:16px">
         <div style="font-weight:600;margin-bottom:4px">⚙️ Configurações</div>

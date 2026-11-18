@@ -2051,7 +2051,7 @@ function escolherEvento(ctx,id){
   // Se a data escolhida em Lançar fica fora do período do novo evento, volta para o 1º dia dele.
   if(ev&&ev.inicio&&inp&&(!inp.value||inp.value<ev.inicio||(ev.fim&&inp.value>ev.fim)))inp.value=ev.inicio;
   renderEventoAtivo();renderEventos();renderDespesas();
-  if(ctx==='gerar'){renderGerarEvento();renderGerarPreview();}
+  if(ctx==='gerar'){renderGerarEvento();preencherCamposNota();renderGerarPreview();}
 }
 document.addEventListener('click',e=>{if(!e.target.closest('.ev-sel'))fecharSeletorEvento()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')fecharSeletorEvento()});
@@ -3058,7 +3058,7 @@ function renderGerarAcoes(){
   el.innerHTML=n
     ?`<button class="btn mt8" id="btn-gerar-pdf" onclick="gerarPDFUnificado()"${bloq} style="flex-direction:column;gap:2px;padding:10px 13px">
         <span style="display:inline-flex;align-items:center;gap:8px">${passo('✓')} Nota nº ${n.num} gerada</span>
-        <span class="sub">${quandoNota(n.em)} · toque para gerar outra</span>
+        <span class="sub">${quandoNota(n.em)} · toque para atualizar</span>
       </button>
       <button class="btn btn-primary mt8" id="btn-enviar-email" onclick="enviarAoFinanceiro()">${passo('2')} Enviar ao financeiro</button>
       <div class="gerar-dica">O e-mail sai com a nota já anexada.</div>`
@@ -3081,11 +3081,18 @@ function renderGerar(){
   // consumia um número de nota sem nenhum documento ser gerado, deixando buracos
   // na numeração sequencial. O incremento de verdade agora só acontece dentro de
   // gerarPDFUnificado(), depois que o PDF é efetivamente criado.
-  document.getElementById('num-nota').value=padNum(S.notaCounter+1);
-  document.getElementById('emissao-nota').value=todayStr();
-  document.getElementById('ref-nota').value=mesToRef();
-  document.getElementById('venc-nota').value=todayStr();
+  preencherCamposNota();
   renderGerarPreview();
+}
+// Evento que já tem nota: gerar de novo ATUALIZA a mesma nota (mesmo número e mesmas datas),
+// em vez de abrir um número novo. Evento sem nota: próximo número e datas de hoje.
+function preencherCamposNota(){
+  const ev=S.eventos.find(e=>e.id===gerarEventoId);
+  const n=ev&&ev.ultimaNota;
+  document.getElementById('num-nota').value=n?n.num:padNum(S.notaCounter+1);
+  document.getElementById('emissao-nota').value=(n&&n.emissao)||todayStr();
+  document.getElementById('ref-nota').value=(n&&n.ref)||mesToRef();
+  document.getElementById('venc-nota').value=(n&&n.venc)||todayStr();
 }
 
 // Resumo do evento: o mesmo cartão em Despesas e em Gerar. Cabeçalho com a quantidade,
@@ -3336,7 +3343,9 @@ async function gerarPDFUnificado(){
     // Em vez de baixar direto, abre a conferência: a pessoa vê a nota (e os
     // comprovantes) como vão ser enviados e só então confirma.
     const nomeArquivo = `Nota_de_Debito_N${num}_${ev.nome.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]/g,'_')}.pdf`;
-    notaPendente = {blob, nomeArquivo, ev, num, bytes:pdfBytes, qtd:desp.length, total:desp.reduce((t,d)=>t+d.valor,0)};
+    notaPendente = {blob, nomeArquivo, ev, num, bytes:pdfBytes, qtd:desp.length, total:desp.reduce((t,d)=>t+d.valor,0),
+      atualiza:!!(ev.ultimaNota&&ev.ultimaNota.num===num),
+      emissao:document.getElementById('emissao-nota').value, ref:document.getElementById('ref-nota').value, venc:document.getElementById('venc-nota').value};
     await abrirConferenciaNota();
 
   }catch(e){
@@ -3356,7 +3365,7 @@ async function abrirConferenciaNota(){
   const n=notaPendente;
   if(!n)return;
   const seq=++notaSeq;
-  document.getElementById('nota-resumo').textContent=`Nº ${n.num} · ${n.qtd} ${n.qtd===1?'despesa':'despesas'} · ${fv(n.total)}`;
+  document.getElementById('nota-resumo').textContent=`Nº ${n.num}${n.atualiza?' (atualiza a nota anterior)':''} · ${n.qtd} ${n.qtd===1?'despesa':'despesas'} · ${fv(n.total)}`;
   const body=document.getElementById('nota-body');
   body.innerHTML='<div style="padding:40px 0;color:var(--text2)">⏳ Preparando a visualização...</div>';
   const conf=document.getElementById('btn-nota-confirmar');
@@ -3402,9 +3411,11 @@ async function confirmarNota(){
 
     // Só agora, com o PDF de fato gerado e baixado, consome o número da nota
     // e guarda no evento qual foi a última nota (o app lembra disso ao reabrir).
-    ev.ultimaNota={num:n.num,arquivo:nomeArquivo,em:new Date().toISOString()};
+    const anterior=ev.ultimaNota;
+    ev.ultimaNota={num:n.num,arquivo:nomeArquivo,em:new Date().toISOString(),emissao:n.emissao,ref:n.ref,venc:n.venc};
     notaArquivo={eventoId:ev.id,nome:nomeArquivo,blob};
-    S.notaCounter++;
+    // Atualizar a mesma nota não gasta número novo; só uma nota nova avança o contador.
+    if(!n.atualiza)S.notaCounter++;
     salvar();
 
     // Salvar no Drive na pasta do evento
@@ -3419,6 +3430,14 @@ async function confirmarNota(){
             reader.onload=e=>res(e.target.result.split(',')[1]);
             reader.readAsDataURL(blob);
           });
+          // Evento renomeado desde a última geração: o arquivo da versão antiga (outro nome) sai do Drive.
+          if(n.atualiza&&anterior&&anterior.arquivo&&anterior.arquivo!==nomeArquivo){
+            try{
+              const qa=`name='${escDriveQ(anterior.arquivo)}' and trashed=false and '${eventoFid}' in parents`;
+              const ant=await driveReq('GET',`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qa)}&fields=files(id)`);
+              for(const f of (ant.files||[]))await driveReq('DELETE',`https://www.googleapis.com/drive/v3/files/${f.id}`);
+            }catch(e){console.warn('Não consegui remover a versão antiga da nota:',e)}
+          }
           // Verificar se já existe e deletar versão anterior
           const q = `name='${escDriveQ(nomeArquivo)}' and trashed=false and '${eventoFid}' in parents`;
           const existing = await driveReq('GET',
@@ -3452,6 +3471,7 @@ async function confirmarNota(){
       }
     }
 
+    preencherCamposNota();
     renderGerarAcoes();
   }catch(e){
     console.error('Erro ao finalizar a nota:',e);

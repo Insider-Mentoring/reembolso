@@ -322,6 +322,7 @@ button.event-chip{border:none;font-family:inherit;text-align:left;cursor:pointer
 <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11.5M7.5 12l4.5 4.5 4.5-4.5M5 20h14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 <symbol id="i-cog" viewBox="0 0 24 24"><path d="M18.36 9.31 L20.70 9.69 L20.70 14.31 L18.36 14.69 L18.39 14.59 L19.79 16.51 L16.51 19.79 L14.59 18.39 L14.69 18.36 L14.31 20.70 L9.69 20.70 L9.31 18.36 L9.41 18.39 L7.49 19.79 L4.21 16.51 L5.61 14.59 L5.64 14.69 L3.30 14.31 L3.30 9.69 L5.64 9.31 L5.61 9.41 L4.21 7.49 L7.49 4.21 L9.41 5.61 L9.31 5.64 L9.69 3.30 L14.31 3.30 L14.69 5.64 L14.59 5.61 L16.51 4.21 L19.79 7.49 L18.39 9.41Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.9" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
 <symbol id="i-phone" viewBox="0 0 24 24"><rect x="6.5" y="3" width="11" height="18" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10.5 18h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M15.5 8.5V6.7a2.2 2.2 0 0 0-2.2-2.2H6.7a2.2 2.2 0 0 0-2.2 2.2v6.6a2.2 2.2 0 0 0 2.2 2.2h1.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
 <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M4.5 20c.6-3.6 3.7-5.6 7.5-5.6s6.9 2 7.5 5.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
 <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M15.8 8.2l-2 5.6-5.6 2 2-5.6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
 <symbol id="i-book" viewBox="0 0 24 24"><path d="M5 4.5h10.5a3 3 0 0 1 3 3V20H8a3 3 0 0 1-3-3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M5 17a3 3 0 0 1 3-3h10.5" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
@@ -2991,6 +2992,7 @@ function renderDespesas(){
           <div class="spacer"></div>
           <div class="exp-ctrl">
             <button onclick="editarDespesa(${d.id})" title="Editar" aria-label="Editar"><svg class="icon"><use href="#i-pencil"/></svg></button>
+            <button onclick="duplicarDespesa(${d.id})" title="Duplicar" aria-label="Duplicar despesa"><svg class="icon"><use href="#i-copy"/></svg></button>
             <button class="danger" onclick="delDespesa(${d.id})" title="Excluir" aria-label="Excluir"><svg class="icon"><use href="#i-trash"/></svg></button>
           </div>
         </div>
@@ -4095,7 +4097,9 @@ let editTipo='transporte';
 let editAttachs=[];
 let editNFLink='';
 
-function editarDespesa(id){
+let editDuplicando=false;
+function duplicarDespesa(id){editarDespesa(id,true)}
+function editarDespesa(id,duplicar=false){
   if(comprovantePendente>0){alert('⏳ Aguarde o comprovante da despesa atual terminar de carregar antes de editar outra.');return}
   const d=S.despesas.find(x=>x.id===id);
   if(!d)return;
@@ -4142,6 +4146,18 @@ function editarDespesa(id){
   editAttachs=(d.attachs||[]).map(a=>({...a}));
   renderEditAttachs();
 
+  // Duplicar: abre com os mesmos dados (tipo, título, data e valor), sem comprovante, link da NF-e
+  // nem divisão, que são de cada compra. Só cria a cópia ao salvar; fechar sem salvar não cria nada.
+  editDuplicando=!!duplicar;
+  if(duplicar){
+    editNFLink='';
+    document.getElementById('edit-nf-show').style.display='none';
+    document.getElementById('edit-nf-input-row').style.display='flex';
+    editAttachs=[];renderEditAttachs();
+    preencherDivisao('edit-',null);
+  }
+  document.querySelector('#modal-editar h2').textContent=duplicar?'📄 Duplicar despesa':'✏️ Editar despesa';
+  document.getElementById('btn-salvar-edicao').textContent=duplicar?'💾 Salvar cópia':'💾 Salvar alterações';
   atualizarEditDesc();
   openModal('modal-editar');
 }
@@ -4262,6 +4278,33 @@ function salvarEdicao(){
   const local=ev.local?ev.nome+' | '+ev.local:ev.nome;
   const desc=getEditTitulo()+'\nDia '+dia+' — '+local;
   const dataAntiga=S.despesas[idx].data;
+
+  if(editDuplicando){
+    // Cópia da despesa original, no mesmo evento, logo abaixo dela (ou na ordem por data, se a data mudou).
+    const orig=S.despesas[idx];
+    const evOrig=S.eventos.find(e=>e.id===orig.eventoId)||{};
+    const localOrig=evOrig.cidade?evOrig.nome+' | '+evOrig.cidade:(evOrig.nome||'');
+    const copia={
+      id:novoDespesaId(),eventoId:orig.eventoId,
+      desc:getEditTitulo()+'\nDia '+dia+' — '+localOrig,
+      data,valor,tipo:editTipo,diaAtivo:dia,nfLink:editNFLink,
+      attachs:editAttachs.map(a=>({...a}))
+    };
+    if(divisao)copia.divisao=divisao;
+    if(data!==orig.data)inserirPorData(copia); else S.despesas.splice(idx+1,0,copia);
+    editDuplicando=false;
+    salvar();
+    closeModal('modal-editar');
+    renderDespesas();
+    mostrarToast('📄 Despesa duplicada','ok');
+    const el=document.querySelector(`.exp-item[data-id="${copia.id}"]`);
+    if(el){
+      el.scrollIntoView({block:'center',behavior:'smooth'});
+      el.classList.remove('flash');void el.offsetWidth;el.classList.add('flash');
+      setTimeout(()=>el.classList.remove('flash'),700);
+    }
+    return;
+  }
 
   S.despesas[idx]={
     ...S.despesas[idx],
@@ -5356,7 +5399,7 @@ initGoogle();
       <button class="tr" onclick="clearEditNF()">✕</button>
     </div>
 
-    <button class="btn btn-primary mt16" onclick="salvarEdicao()">💾 Salvar alterações</button>
+    <button class="btn btn-primary mt16" id="btn-salvar-edicao" onclick="salvarEdicao()">💾 Salvar alterações</button>
   </div>
 </div>
 

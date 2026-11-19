@@ -228,6 +228,15 @@ button.event-chip{border:none;font-family:inherit;text-align:left;cursor:pointer
 .envio-email button{flex-shrink:0;background:none;border:1px solid var(--border2);border-radius:8px;padding:6px 12px;font:inherit;font-size:12.5px;font-weight:600;color:var(--text);cursor:pointer}
 .gerar-dica{font-size:12px;color:var(--text2);text-align:center;margin-top:8px;line-height:1.5}
 .gerar-dica b{color:var(--text);font-weight:600;word-break:break-all}
+.modal-visor{display:flex;flex-direction:column;height:92dvh;max-height:92dvh;overflow:hidden;padding-bottom:0}
+#nota-body{flex:1;min-height:0;display:flex;flex-direction:column;text-align:center}
+.visor{display:flex;flex-direction:column;min-height:0;width:100%;text-align:left}
+.visor-barra{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:0 0 8px;font-size:12px;color:var(--text2)}
+.visor-zoom{display:inline-flex;align-items:center;border:.5px solid var(--border2);border-radius:10px;overflow:hidden;background:var(--bg)}
+.visor-zoom button{background:none;border:none;color:var(--text);font:inherit;font-size:16px;font-weight:600;min-width:40px;height:34px;cursor:pointer}
+.visor-zoom .visor-pct{font-size:12.5px;min-width:54px;border-left:.5px solid var(--border2);border-right:.5px solid var(--border2)}
+.visor-rolagem{--z:1;flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y;border-radius:var(--radius-sm);background:var(--bg3);padding:6px}
+.visor-pag{position:relative;width:calc(var(--z)*100%);background:#fff;margin:0 0 8px;border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.18)}
 .nota-acoes{position:sticky;bottom:0;display:flex;flex-direction:column;gap:8px;background:var(--bg2);padding:12px 0 calc(16px + env(safe-area-inset-bottom,0px));margin-top:4px;border-top:.5px solid var(--border)}
 .modal{background:var(--bg2);border-radius:20px 20px 0 0;padding:20px 16px 40px;width:100%;max-height:92dvh;overflow-y:auto}
 .modal h2{font-size:17px;font-weight:600;margin-bottom:16px}
@@ -1752,6 +1761,7 @@ function openModal(id){
 }
 
 function closeModal(id){
+  liberarVisor(id);
   const el=document.getElementById(id);
   const estavaAberto=el.classList.contains('open');
   el.classList.remove('open');
@@ -2563,6 +2573,7 @@ async function mostrarPreviewComprovante(list,i){
   const seq=++previewSeq;
 
   const body=document.getElementById('preview-body');
+  if(body._visor)body._visor.destruir();
   document.getElementById('preview-title').textContent=a.name||'Comprovante';
   const nav=document.getElementById('preview-nav');
   if(nav) nav.style.display=list.length>1?'flex':'none';
@@ -2605,35 +2616,147 @@ async function mostrarPreviewComprovante(list,i){
 // PDF desenhado dentro do próprio app (pdf.js). O <embed> de PDF não funciona no
 // Chrome do celular: ele entregava o arquivo para outro app visualizador, o que
 // tirava a pessoa do app, e ao fechar o PDF o app reiniciava do zero.
-async function desenharPdfEm(body,bytes,cancelado,maxPaginas){
+// Visor de PDF com zoom (conferência da nota e comprovantes em PDF). Mostra TODAS as páginas: elas
+// ficam como molduras do tamanho certo e só a parte perto da tela é desenhada (as de longe são
+// liberadas), então um PDF de 50 páginas não pesa. Zoom por pinça, toque duplo ou botões; com zoom,
+// a área rola nos dois sentidos e as páginas visíveis são redesenhadas nítidas.
+const VISOR_ZOOMS=[1,1.5,2,3,4];
+async function montarVisorPdf(host,bytes,cancelado,altura){
   await carregarLib('pdfjs');
   const pdfjs=window.pdfjsLib;
   pdfjs.GlobalWorkerOptions.workerSrc=PDFJS_WORKER;
   const doc=await pdfjs.getDocument({data:bytes}).promise;
   if(cancelado()){doc.destroy();return 0}
-  body.innerHTML='';
-  const total=doc.numPages,max=Math.min(total,maxPaginas||20);
-  const largura=Math.min(body.clientWidth||340,900);
-  const dpr=Math.min(window.devicePixelRatio||1,2);
-  for(let n=1;n<=max;n++){
-    const page=await doc.getPage(n);
-    if(cancelado()){doc.destroy();return 0}
-    const base=page.getViewport({scale:1});
-    const vp=page.getViewport({scale:largura/base.width*dpr});
+  const total=doc.numPages;
+  const paginasPdf=await Promise.all([...Array(total)].map((_,i)=>doc.getPage(i+1)));
+  if(cancelado()){doc.destroy();return 0}
+  if(host._visor)host._visor.destruir();
+  host.innerHTML=`<div class="visor" style="height:${altura||'100%'}">
+    <div class="visor-barra">
+      <span class="visor-info">Página 1 de ${total}</span>
+      <span class="visor-zoom">
+        <button type="button" data-z="-" aria-label="Diminuir o zoom">−</button>
+        <button type="button" data-z="0" class="visor-pct" aria-label="Ajustar à tela">100%</button>
+        <button type="button" data-z="+" aria-label="Aumentar o zoom">+</button>
+      </span>
+    </div>
+    <div class="visor-rolagem"></div>
+  </div>`;
+  const rol=host.querySelector('.visor-rolagem'),info=host.querySelector('.visor-info'),pct=host.querySelector('.visor-pct');
+  let z=1,destruido=false,timerRender=null;
+  const paginas=paginasPdf.map((page,i)=>{
+    const vp=page.getViewport({scale:1});
+    const el=document.createElement('div');
+    el.className='visor-pag';el.style.aspectRatio=vp.width+' / '+vp.height;
+    rol.appendChild(el);
+    return {n:i+1,page,w:vp.width,el,canvas:null,px:0,token:0,tarefa:null,visivel:false};
+  });
+  async function renderizar(p){
+    if(destruido||!p.visivel)return;
+    const cssW=p.el.clientWidth;if(!cssW)return;
+    const alvo=Math.min(Math.round(cssW*Math.min(window.devicePixelRatio||1,2.5)),1900);
+    if(p.canvas&&Math.abs(p.px-alvo)/alvo<0.12)return;
+    if(p.tarefa)try{p.tarefa.cancel()}catch(_){}
+    const token=++p.token;
+    const vp=p.page.getViewport({scale:alvo/p.w});
     const c=document.createElement('canvas');
     c.width=Math.round(vp.width);c.height=Math.round(vp.height);
-    c.style.cssText='width:100%;height:auto;display:block;margin:0 0 8px;border-radius:var(--radius-sm);background:#fff;border:.5px solid var(--border)';
-    body.appendChild(c);
-    await page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
+    p.tarefa=p.page.render({canvasContext:c.getContext('2d'),viewport:vp});
+    try{await p.tarefa.promise}catch(_){return}     // cancelada por um redesenho mais novo
+    if(destruido||token!==p.token||!p.visivel)return;
+    c.style.cssText='position:absolute;inset:0;width:100%;height:100%';
+    p.el.replaceChildren(c);p.canvas=c;p.px=alvo;
   }
-  if(total>max)body.insertAdjacentHTML('beforeend',`<div style="font-size:12px;color:var(--text2);margin-bottom:8px">Mostrando ${max} de ${total} páginas</div>`);
+  function liberar(p){
+    p.token++;if(p.tarefa)try{p.tarefa.cancel()}catch(_){}
+    p.el.replaceChildren();p.canvas=null;p.px=0;
+  }
+  const obs=new IntersectionObserver(es=>{
+    for(const e of es){
+      const p=paginas.find(x=>x.el===e.target);if(!p)continue;
+      p.visivel=e.isIntersecting;
+      if(p.visivel)renderizar(p);else liberar(p);
+    }
+  },{root:rol,rootMargin:'100% 0px 100% 0px'});
+  paginas.forEach(p=>obs.observe(p.el));
+  function redesenharVisiveis(){clearTimeout(timerRender);timerRender=setTimeout(()=>paginas.forEach(p=>p.visivel&&renderizar(p)),120)}
+  function atualizarInfo(){
+    const ref=rol.scrollTop+rol.clientHeight*0.35;
+    let atual=paginas[0];
+    for(const p of paginas){if(p.el.offsetTop<=ref)atual=p;else break}
+    info.textContent=`Página ${atual.n} de ${total}`;
+  }
+  rol.addEventListener('scroll',atualizarInfo,{passive:true});
+  // Zoom mantendo o ponto sob os dedos (cx, cy, relativos à área de rolagem) no mesmo lugar.
+  function zoomPara(novo,cx,cy,redesenhar){
+    novo=Math.max(1,Math.min(4,novo));
+    if(Math.abs(novo-z)<0.001)return;
+    const fx=(rol.scrollLeft+cx)/rol.scrollWidth,fy=(rol.scrollTop+cy)/rol.scrollHeight;
+    z=novo;rol.style.setProperty('--z',z);
+    rol.scrollLeft=fx*rol.scrollWidth-cx;rol.scrollTop=fy*rol.scrollHeight-cy;
+    pct.textContent=Math.round(z*100)+'%';
+    if(redesenhar)redesenharVisiveis();
+  }
+  const centro=()=>[rol.clientWidth/2,rol.clientHeight/2];
+  host.querySelector('.visor-zoom').addEventListener('click',e=>{
+    const b=e.target.closest('button');if(!b)return;
+    const [cx,cy]=centro();
+    if(b.dataset.z==='0')zoomPara(1,cx,cy,true);
+    else if(b.dataset.z==='+')zoomPara(VISOR_ZOOMS.find(v=>v>z+0.01)||4,cx,cy,true);
+    else zoomPara([...VISOR_ZOOMS].reverse().find(v=>v<z-0.01)||1,cx,cy,true);
+  });
+  // Pinça e toque duplo
+  let pinca=null,ultimoToque={t:0,x:0,y:0},toqueIni=null,ultimoTouchEm=0;
+  const dist=e=>Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+  rol.addEventListener('touchstart',e=>{
+    if(e.touches.length===2){const r=rol.getBoundingClientRect();pinca={d0:dist(e),z0:z};toqueIni=null;
+      pinca.cx=(e.touches[0].clientX+e.touches[1].clientX)/2-r.left;pinca.cy=(e.touches[0].clientY+e.touches[1].clientY)/2-r.top}
+    else if(e.touches.length===1)toqueIni={x:e.touches[0].clientX,y:e.touches[0].clientY};
+  },{passive:true});
+  rol.addEventListener('touchmove',e=>{
+    if(pinca&&e.touches.length===2){e.preventDefault();zoomPara(pinca.z0*dist(e)/pinca.d0,pinca.cx,pinca.cy,false)}
+    else if(toqueIni&&Math.hypot(e.touches[0].clientX-toqueIni.x,e.touches[0].clientY-toqueIni.y)>10)toqueIni=null;
+  },{passive:false});
+  rol.addEventListener('touchend',e=>{
+    ultimoTouchEm=Date.now();
+    if(pinca){if(e.touches.length<2){pinca=null;redesenharVisiveis()}return}
+    if(!toqueIni||e.touches.length)return;
+    const t=e.changedTouches[0],agora=Date.now();
+    if(agora-ultimoToque.t<320&&Math.hypot(t.clientX-ultimoToque.x,t.clientY-ultimoToque.y)<30){
+      const r=rol.getBoundingClientRect();
+      zoomPara(z>1.05?1:2.5,t.clientX-r.left,t.clientY-r.top,true);
+      ultimoToque={t:0,x:0,y:0};
+    }else ultimoToque={t:agora,x:t.clientX,y:t.clientY};
+    toqueIni=null;
+  },{passive:true});
+  // Computador: Ctrl + roda do mouse e duplo clique
+  rol.addEventListener('wheel',e=>{
+    if(!e.ctrlKey)return;e.preventDefault();
+    const r=rol.getBoundingClientRect();
+    zoomPara(z*(e.deltaY<0?1.15:1/1.15),e.clientX-r.left,e.clientY-r.top,true);
+  },{passive:false});
+  rol.addEventListener('dblclick',e=>{
+    if(Date.now()-ultimoTouchEm<700)return;      // no celular o toque duplo já foi tratado acima
+    const r=rol.getBoundingClientRect();
+    zoomPara(z>1.05?1:2.5,e.clientX-r.left,e.clientY-r.top,true);
+  });
+  host._visor={destruir(){
+    destruido=true;clearTimeout(timerRender);obs.disconnect();
+    paginas.forEach(p=>{if(p.tarefa)try{p.tarefa.cancel()}catch(_){}});
+    try{doc.destroy()}catch(_){}
+    host._visor=null;
+  }};
   return total;
+}
+function liberarVisor(id){
+  const h=id==='modal-nota'?document.getElementById('nota-body'):id==='modal-preview'?document.getElementById('preview-body'):null;
+  if(h&&h._visor)h._visor.destruir();
 }
 async function renderizarPdfNoPreview(body,a,seq){
   body.innerHTML='<div style="padding:40px 0;color:var(--text2)">⏳ Abrindo PDF...</div>';
   try{
     const bytes=new Uint8Array(await (await fetch(a.data)).arrayBuffer());
-    await desenharPdfEm(body,bytes,()=>seq!==previewSeq,20);
+    await montarVisorPdf(body,bytes,()=>seq!==previewSeq,'62dvh');
   }catch(e){
     if(seq!==previewSeq)return;
     console.warn('Erro ao mostrar PDF:',e);
@@ -3404,7 +3527,7 @@ async function abrirConferenciaNota(){
   conf.disabled=false;
   if(!document.getElementById('modal-nota').classList.contains('open')) openModal('modal-nota');
   try{
-    const total=await desenharPdfEm(body,new Uint8Array(n.bytes),()=>seq!==notaSeq,40);
+    const total=await montarVisorPdf(body,new Uint8Array(n.bytes),()=>seq!==notaSeq,'100%');
     if(seq===notaSeq && total) document.getElementById('nota-resumo').textContent+=` · ${total} ${total===1?'página':'páginas'}`;
   }catch(e){
     if(seq!==notaSeq)return;
@@ -5477,11 +5600,11 @@ initGoogle();
 
 <!-- MODAL CONFERÊNCIA DA NOTA -->
 <div class="modal-overlay" id="modal-nota">
-  <div class="modal" style="padding-bottom:0">
+  <div class="modal modal-visor">
     <button class="modal-close" onclick="voltarDaConferencia()">✕</button>
     <h2>Conferir nota de débito</h2>
     <p id="nota-resumo" style="font-size:13px;color:var(--text2);margin:-4px 0 12px"></p>
-    <div id="nota-body" style="text-align:center"></div>
+    <div id="nota-body"></div>
     <div class="nota-acoes">
       <button type="button" class="btn btn-primary" id="btn-nota-confirmar" onclick="confirmarNota()">✅ Confirmar e baixar</button>
       <button type="button" class="btn" onclick="voltarDaConferencia()">Voltar e ajustar</button>
